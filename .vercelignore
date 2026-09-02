@@ -1,0 +1,7 @@
+uploads/
+refs/
+rust-svelte-stack/
+.tsbuild/
+.esbuild-fix/
+.vite-source-tags.js
+*.md
