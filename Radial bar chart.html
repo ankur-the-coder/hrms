@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QA · Radial bar · 3D Interactive</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kalam:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f2f1ec;
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: 1;
+        }
+
+        .ui-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 24px 32px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        .title {
+            font-family: 'Kalam', cursive;
+            font-size: 22px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin: 0;
+        }
+
+        .toolbar { display: flex; gap: 12px; }
+
+        .toggle-group {
+            display: flex;
+            background: #e6e4df;
+            border-radius: 20px;
+            padding: 3px;
+            box-shadow: inset 1px 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .toggle-btn {
+            padding: 6px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #666;
+            background: transparent;
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .toggle-btn.active {
+            background: #ffffff;
+            color: #0f6b3d;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+
+        .btn-single {
+            padding: 6px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1a1a1a;
+            background: #f2f1ec;
+            border-radius: 18px;
+            border: 1px solid #ffffff;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.05), -2px -2px 5px rgba(255,255,255,0.8);
+            cursor: pointer;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 16px;
+            justify-content: center;
+            pointer-events: auto;
+            background: rgba(242, 241, 236, 0.85);
+            backdrop-filter: blur(8px);
+            padding: 10px 20px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.6);
+            max-width: 90%;
+            margin: 0 auto;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+        /* Staggered Callout Badges */
+        .callout-badge {
+            font-family: 'Kalam', cursive;
+            font-size: 11px;
+            font-weight: 700;
+            color: #1a1a1a;
+            background: #ffffff;
+            border: 1.5px solid var(--badge-color);
+            border-radius: 12px;
+            padding: 1px 8px;
+            white-space: nowrap;
+            pointer-events: auto; /* allow hover */
+            box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+            transform: translate(-100%, -50%);
+            margin-left: -8px;
+            transition: transform 0.2s;
+        }
+        .callout-badge:hover {
+            transform: translate(-100%, -50%) scale(1.1);
+            z-index: 10;
+        }
+
+        .arc-value {
+            font-family: 'Kalam', cursive;
+            font-size: 11px;
+            font-weight: 700;
+            color: #ffffff;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div class="ui-container">
+        <div class="header">
+            <h1 class="title">QA · Radial bar · 3D Interactive</h1>
+            <div class="toolbar">
+                <div class="toggle-group">
+                    <button class="toggle-btn active" id="btn-2d">☐ 2D</button>
+                    <button class="toggle-btn" id="btn-3d">⚄ 3D</button>
+                </div>
+                <button class="btn-single">Radial ⌄</button>
+                <button class="btn-single">⭳ Export</button>
+            </div>
+        </div>
+
+        <div class="legend" id="legend"></div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // --- DATA ---
+        const data = [
+            { name: 'North Region',    value: 42, color: '#0f6b3d' },
+            { name: 'South Region',    value: 28, color: '#b8892e' },
+            { name: 'East Region',     value: 19, color: '#1aa9de' },
+            { name: 'West Region',     value: 33, color: '#d81e6b' },
+            { name: 'Central Hub',     value: 12, color: '#f07a17' },
+            { name: 'Northeast Zone',  value: 24, color: '#1dc7bd' },
+            { name: 'Southwest Zone',  value: 37, color: '#2743a8' },
+            { name: 'Metro City',      value: 45, color: '#7ed321' },
+            { name: 'Coastal Belt',    value: 21, color: '#f04f7c' },
+            { name: 'Hill Division',   value: 16, color: '#8a5a1c' },
+            { name: 'Desert Sector',   value: 9,  color: '#1cc0d6' },
+            { name: 'Island Cluster',  value: 14, color: '#6f7a92' },
+            { name: 'Capital District',value: 39, color: '#1c8a52' },
+            { name: 'Port Corridor',   value: 26, color: '#c99632' },
+            { name: 'Tech Parklands',  value: 31, color: '#12b5e5' },
+            { name: 'Green Valley',    value: 18, color: '#e63a7a' }
+        ];
+
+        const MAX_VAL = 50;
+
+        // --- SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#f2f1ec');
+
+        const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 500);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1;
+        container.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        container.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 - 0.05; // Prevent camera from going under ground
+        controls.enabled = false;
+
+        // --- LIGHTING ---
+        scene.add(new THREE.AmbientLight(0xffffff, 1.4));
+
+        const keyLight = new THREE.DirectionalLight(0xfffdfa, 2.2);
+        keyLight.position.set(8, 20, 10);
+        keyLight.castShadow = true;
+        keyLight.shadow.mapSize.set(2048, 2048);
+        keyLight.shadow.bias = -0.0005;
+        scene.add(keyLight);
+
+        const fillLight = new THREE.DirectionalLight(0xa0c8ff, 0.8);
+        fillLight.position.set(-10, 8, -10);
+        scene.add(fillLight);
+
+        // --- GRAPH ROOT ---
+        const graphGroup = new THREE.Group();
+        scene.add(graphGroup);
+
+        // Floor plane to receive shadows
+        const floorGeo = new THREE.PlaneGeometry(50, 50);
+        const floorMat = new THREE.ShadowMaterial({ opacity: 0.1 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -0.05;
+        floor.receiveShadow = true;
+        graphGroup.add(floor);
+
+        // --- DIMENSIONS ---
+        const INNER_R = 1.2;
+        const R_STEP = 0.35;
+        const TUBE_RADIUS = 0.11;
+
+        // Custom Path mapped explicitly to XZ plane to prevent any twisting/deviation
+        class ArcCurve3 extends THREE.Curve {
+            constructor(radius, startAngle, endAngle) {
+                super();
+                this.radius = radius;
+                this.startAngle = startAngle;
+                this.endAngle = endAngle;
+            }
+            getPoint(t, optionalTarget = new THREE.Vector3()) {
+                const angle = this.startAngle + t * (this.endAngle - this.startAngle);
+                // Math.cos for X, -Math.sin for Z (standard 2D mapping to 3D ground plane)
+                return optionalTarget.set(Math.cos(angle) * this.radius, 0, -Math.sin(angle) * this.radius);
+            }
+        }
+
+        // --- SOLID CYLINDER GENERATOR (Tube + Spherical Caps) ---
+        function createSolidCylinderBar(radius, startAngle, endAngle, color) {
+            const group = new THREE.Group();
+            
+            const mat = new THREE.MeshPhysicalMaterial({
+                color: new THREE.Color(color),
+                roughness: 0.25,
+                metalness: 0.1,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.15
+            });
+
+            // 1. The curved tube
+            const curve = new ArcCurve3(radius, startAngle, endAngle);
+            const tubeGeo = new THREE.TubeGeometry(curve, 96, TUBE_RADIUS, 24, false);
+            const tube = new THREE.Mesh(tubeGeo, mat);
+            tube.castShadow = true;
+            tube.receiveShadow = true;
+            group.add(tube);
+
+            // 2. Solid Caps (Spheres at the exact start and end points)
+            const capGeo = new THREE.SphereGeometry(TUBE_RADIUS, 24, 24);
+            
+            const capStart = new THREE.Mesh(capGeo, mat);
+            capStart.position.copy(curve.getPoint(0));
+            capStart.castShadow = true;
+            group.add(capStart);
+
+            const capEnd = new THREE.Mesh(capGeo, mat);
+            capEnd.position.copy(curve.getPoint(1));
+            capEnd.castShadow = true;
+            group.add(capEnd);
+
+            return group;
+        }
+
+        // --- TRACK GENERATOR ---
+        function createTrack(radius) {
+            const curve = new ArcCurve3(radius, 0, Math.PI * 2);
+            // Track is slightly thinner than the colored bar
+            const geo = new THREE.TubeGeometry(curve, 128, TUBE_RADIUS * 0.85, 16, true);
+            const mat = new THREE.MeshStandardMaterial({
+                color: 0xe4e2dc, roughness: 0.9, metalness: 0.0
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.receiveShadow = true;
+            return mesh;
+        }
+
+        // --- BUILD ALL RINGS ---
+        const rings = [];
+
+        data.forEach((d, i) => {
+            const radius = INNER_R + i * R_STEP;
+
+            // 1. Background grey track
+            graphGroup.add(createTrack(radius));
+
+            // Angle Math: 12 o'clock in XZ plane is PI/2. We sweep clockwise (subtract angle).
+            const frac = Math.min(1, d.value / MAX_VAL);
+            const startA = Math.PI / 2;
+            const sweep = frac * Math.PI * 2 * 0.97; // 0.97 leaves a tiny gap visually
+            const endA = startA - sweep;
+
+            // 2. Colored Solid Bar
+            const barGroup = createSolidCylinderBar(radius, startA, endA, d.color);
+            graphGroup.add(barGroup);
+
+            // Target Y dictates how high it lifts in 3D mode (creating depth without massive separation)
+            barGroup.userData.targetY = 0.1 + (d.value / MAX_VAL) * 0.4;
+
+            // 3. Callout Badge (Staggered vertically to prevent overlapping)
+            const cDiv = document.createElement('div');
+            cDiv.className = 'callout-badge';
+            cDiv.style.setProperty('--badge-color', d.color);
+            cDiv.textContent = `${d.name} · ${d.value}`;
+            const cObj = new CSS2DObject(cDiv);
+            graphGroup.add(cObj);
+            
+            // Stagger target height based on index to create a clean staircase
+            cObj.userData.targetY = 0.6 + (data.length - i) * 0.18; 
+            cObj.userData.radius = radius;
+
+            // 4. Stem Line (connects badge down to the pipe visually)
+            const stemMat = new THREE.LineBasicMaterial({ color: 0xcccccc, transparent: true, opacity: 0.8 });
+            // Geometry requires 2 points, updated in animate loop
+            const stemGeo = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, 0, -radius),
+                new THREE.Vector3(0, 0, -radius)
+            ]);
+            const stemLine = new THREE.Line(stemGeo, stemMat);
+            graphGroup.add(stemLine);
+
+            // 5. Value Label at the tip
+            const vDiv = document.createElement('div');
+            vDiv.className = 'arc-value';
+            vDiv.textContent = d.value;
+            const vObj = new CSS2DObject(vDiv);
+            
+            // Place directly over the end cap sphere
+            const endPoint = new ArcCurve3(radius, startA, endA).getPoint(1);
+            vObj.userData.baseX = endPoint.x;
+            vObj.userData.baseZ = endPoint.z;
+            graphGroup.add(vObj);
+
+            rings.push({ barGroup, calloutObj: cObj, stemLine: stemLine, valueObj: vObj });
+        });
+
+        // --- POPULATE LEGEND ---
+        const legendContainer = document.getElementById('legend');
+        data.forEach(d => {
+            const item = document.createElement('div');
+            item.className = 'legend-item';
+            item.innerHTML = `<div class="dot" style="background:${d.color}"></div>${d.name}`;
+            legendContainer.appendChild(item);
+        });
+
+        // --- CAMERA & TRANSITION LOGIC ---
+        const state2D = {
+            camPos: new THREE.Vector3(0, 22, 0.001),
+            camTarget: new THREE.Vector3(0, 0, 0),
+            up: new THREE.Vector3(0, 0, -1),
+            barLift: 0
+        };
+
+        const state3D = {
+            camPos: new THREE.Vector3(12, 14, 16), // Beautiful default isometric tilt
+            camTarget: new THREE.Vector3(0, 0, 0),
+            up: new THREE.Vector3(0, 1, 0),
+            barLift: 1.0
+        };
+
+        let mode = '2D';
+        let isTransitioning = false;
+        let transitionProgress = 1;
+        
+        const startCamPos = new THREE.Vector3();
+        const startCamTarget = new THREE.Vector3();
+        const startCamUp = new THREE.Vector3();
+
+        // Initialize at 2D
+        camera.position.copy(state2D.camPos);
+        camera.up.copy(state2D.up);
+        controls.target.copy(state2D.camTarget);
+
+        // UI Event Listeners
+        document.getElementById('btn-2d').onclick = () => {
+            if (mode === '2D') return;
+            mode = '2D';
+            document.getElementById('btn-2d').classList.add('active');
+            document.getElementById('btn-3d').classList.remove('active');
+            
+            // Lock controls during transition and in 2D
+            controls.enabled = false; 
+            beginTransition();
+        };
+
+        document.getElementById('btn-3d').onclick = () => {
+            if (mode === '3D') return;
+            mode = '3D';
+            document.getElementById('btn-3d').classList.add('active');
+            document.getElementById('btn-2d').classList.remove('active');
+            
+            beginTransition();
+        };
+
+        function beginTransition() {
+            isTransitioning = true;
+            transitionProgress = 0;
+            startCamPos.copy(camera.position);
+            startCamTarget.copy(controls.target);
+            startCamUp.copy(camera.up);
+        }
+
+        // --- ANIMATION LOOP ---
+        let currentLift = 0;
+        const tempTarget = new THREE.Vector3();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const targetState = mode === '2D' ? state2D : state3D;
+
+            // 1. Handle Smooth Camera Swoop Transition
+            if (isTransitioning) {
+                transitionProgress += 0.02; // speed of swoop
+                if (transitionProgress >= 1) {
+                    transitionProgress = 1;
+                    isTransitioning = false;
+                    // Once 3D transition is done, yield to OrbitControls
+                    if (mode === '3D') controls.enabled = true;
+                }
+
+                // Ease Out Cubic
+                const ease = 1 - Math.pow(1 - transitionProgress, 3);
+                
+                camera.position.lerpVectors(startCamPos, targetState.camPos, ease);
+                camera.up.lerpVectors(startCamUp, targetState.up, ease).normalize();
+                
+                tempTarget.lerpVectors(startCamTarget, targetState.camTarget, ease);
+                controls.target.copy(tempTarget);
+            }
+
+            // 2. Animate Lift & Labels (Floating Stairs effect)
+            currentLift += (targetState.barLift - currentLift) * 0.08;
+
+            rings.forEach(r => {
+                // Pipe Height
+                const currentTubeY = r.barGroup.userData.targetY * currentLift;
+                r.barGroup.position.y = currentTubeY;
+                
+                // Value Label Height
+                r.valueObj.position.set(r.valueObj.userData.baseX, currentTubeY + 0.15, r.valueObj.userData.baseZ);
+
+                // Callout Badge Staggered Height
+                // In 2D (lift=0), they sit flat. In 3D they rise into a staircase.
+                const currentLabelY = 0.02 + r.calloutObj.userData.targetY * currentLift;
+                r.calloutObj.position.set(0, currentLabelY, -r.calloutObj.userData.radius);
+
+                // Stem Line stretching from badge to pipe
+                const positions = r.stemLine.geometry.attributes.position.array;
+                positions[1] = currentLabelY; // Top Y (connected to badge)
+                positions[4] = currentTubeY;  // Bottom Y (connected to pipe)
+                r.stemLine.geometry.attributes.position.needsUpdate = true;
+                
+                // Fade stem line out in 2D mode
+                r.stemLine.material.opacity = currentLift * 0.6;
+            });
+
+            controls.update(); // required if controls are enabled
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
