@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corporate Payroll Dynamics — Volumetric 3D / 2D Streamgraph</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-page: #f8fafc;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --card-bg: rgba(255, 255, 255, 0.88);
+  --card-border: rgba(226, 232, 240, 0.85);
+  --gold-accent: #b45309;
+  --gold-bg: rgba(245, 158, 11, 0.1);
+  --gold-border: rgba(180, 83, 9, 0.25);
+  --shadow-subtle: 0 4px 20px rgba(15, 23, 42, 0.05);
+  --shadow-card: 0 12px 30px -4px rgba(15, 23, 42, 0.08);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+
+html, body { width: 100%; height: 100%; overflow: hidden; background-color: var(--bg-page); }
+
+body { font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; color: var(--text-main); }
+
+#canvas-container {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; overflow: hidden; z-index: 1;
+}
+#canvas-container canvas { display: block; }
+
+.ui-layer {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 2;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: 24px 32px;
+}
+
+.header {
+  pointer-events: auto;
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  padding: 16px 24px;
+  border-radius: 14px;
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow-subtle);
+  width: fit-content;
+}
+
+.header-top { display: flex; align-items: center; gap: 12px; margin-bottom: 3px; }
+.title { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; color: #0f172a; }
+.badge-royal {
+  font-size: 11px; padding: 3px 10px; background: var(--gold-bg); color: var(--gold-accent);
+  border: 1px solid var(--gold-border); border-radius: 999px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.subtitle { font-size: 12.5px; font-weight: 500; color: var(--text-muted); }
+
+.controls-panel {
+  pointer-events: auto; position: absolute; top: 24px; right: 32px;
+  display: flex; gap: 8px; background: var(--card-bg); backdrop-filter: blur(16px);
+  padding: 6px; border-radius: 12px; border: 1px solid var(--card-border); box-shadow: var(--shadow-subtle);
+}
+
+.btn {
+  background: transparent; border: 1px solid transparent; padding: 8px 14px; border-radius: 8px;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--text-main); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn:hover { background: rgba(255, 255, 255, 0.9); border-color: var(--card-border); transform: translateY(-1px); }
+.btn.active { background: #0f172a; color: #ffffff; border-color: #0f172a; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15); }
+.btn-export { background: linear-gradient(135deg, #b45309, #d97706); color: #ffffff; border: none; box-shadow: 0 4px 14px rgba(180, 83, 9, 0.25); }
+.btn-export:hover { background: linear-gradient(135deg, #92400e, #b45309); color: #ffffff; transform: translateY(-1px); }
+
+.bottom-bar { display: flex; justify-content: space-between; align-items: flex-end; pointer-events: none; gap: 16px; }
+.instructions {
+  background: var(--card-bg); backdrop-filter: blur(14px); border: 1px solid var(--card-border);
+  padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; color: var(--text-muted);
+  box-shadow: var(--shadow-subtle); pointer-events: auto;
+}
+
+.legend-shelf {
+  pointer-events: auto; background: var(--card-bg); backdrop-filter: blur(14px); border: 1px solid var(--card-border);
+  padding: 8px 12px; border-radius: 12px; box-shadow: var(--shadow-subtle);
+  display: flex; gap: 8px; max-width: 60vw; overflow-x: auto;
+}
+.legend-chip {
+  display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text-main);
+  padding: 4px 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.8); border: 1px solid var(--card-border);
+  white-space: nowrap; cursor: pointer; transition: all 0.2s ease;
+}
+.legend-chip:hover, .legend-chip.active { background: #ffffff; border-color: #94a3b8; transform: translateY(-1px); }
+.legend-chip .dot { width: 8px; height: 8px; border-radius: 2px; }
+.legend-chip .ghost-flag { font-size: 9px; color: var(--gold-accent); font-weight: 800; }
+
+#tooltip {
+  position: absolute; display: none; pointer-events: none; z-index: 100;
+  background: rgba(15, 23, 42, 0.94); backdrop-filter: blur(12px); color: #ffffff;
+  padding: 12px 16px; border-radius: 10px; font-size: 12px; box-shadow: var(--shadow-card);
+  transform: translate(-50%, -125%); white-space: nowrap; min-width: 200px;
+}
+#tooltip .tt-name { font-weight: 700; font-size: 13px; margin-bottom: 2px; display: flex; align-items: center; justify-content: space-between; }
+#tooltip .tt-role { font-size: 11px; color: #94a3b8; margin-bottom: 6px; }
+#tooltip .tt-stat { display: flex; justify-content: space-between; gap: 16px; margin-top: 3px; font-size: 11.5px; }
+#tooltip .tt-val { font-weight: 700; color: #38bdf8; }
+
+.employee-tag {
+  font-size: 11px; font-weight: 800; color: #ffffff;
+  text-shadow: 0 1px 4px rgba(15, 23, 42, 0.8), 0 0 8px rgba(0,0,0,0.4);
+  pointer-events: none; transform: translate(-50%, -50%); letter-spacing: 0.3px;
+}
+.employee-tag.ghost { opacity: 0.55; font-style: italic; }
+
+.axis-label {
+  font-size: 10px; font-weight: 700; color: #64748b; transform: translate(-50%, 0);
+  pointer-events: none; white-space: nowrap;
+}
+
+/* =========================================================================
+   HIGHCHARTS-STYLE MILESTONE ANNOTATIONS
+   -------------------------------------------------------------------------
+   Plain 2D-fixed boxes pinned to one row below the header (never inside
+   3D space, so perspective can never make them collide) + a lightweight
+   full-viewport SVG for the connector lines + anchor dots. Positions are
+   recomputed every animation frame from the live camera projection, and
+   explicit horizontal collision-avoidance guarantees the boxes themselves
+   never overlap, regardless of camera angle.
+   ========================================================================= */
+.hc-callout {
+  position: fixed;
+  width: 148px;
+  transform: translate(-50%, 0);
+  background: #ffffff;
+  border: 1px solid #ccd3de;
+  border-radius: 5px;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.12);
+  padding: 7px 10px;
+  font-size: 10.5px;
+  line-height: 1.35;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.hc-callout.visible { opacity: 1; }
+.hc-callout strong { display: block; font-size: 11px; font-weight: 700; color: #b45309; margin-bottom: 2px; }
+.hc-callout span { display: block; color: #475569; font-weight: 500; }
+
+#connector-svg {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 4;
+}
+#connector-svg line { stroke: #b7c0cc; stroke-width: 1.2; }
+#connector-svg circle { fill: #b45309; }
+</style>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="canvas-container"></div>
+
+<svg id="connector-svg"></svg>
+
+<div class="ui-layer">
+  <div class="header">
+    <div class="header-top">
+      <h1 class="title">Corporate Payroll Dynamics</h1>
+      <span class="badge-royal">10-Year Epoch · 2015–2024</span>
+    </div>
+    <p class="subtitle">Volumetric 3D Multi-Layer Ribbon Streamgraph &amp; Planar 2D Projection</p>
+  </div>
+
+  <div class="controls-panel">
+    <button class="btn active" id="btn-3d">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>
+      Volumetric 3D
+    </button>
+    <button class="btn" id="btn-2d">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 15h18M9 3v18"/></svg>
+      Flat 2D Projection
+    </button>
+    <button class="btn" id="btn-top">Top Flow</button>
+    <button class="btn" id="btn-reset">Reset</button>
+    <button class="btn btn-export" id="btn-export">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export SVG
+    </button>
+  </div>
+
+  <div class="bottom-bar">
+    <div class="instructions">
+      Left Drag: Orbit &bull; Right Drag: Pan &bull; Scroll: Zoom &bull; Hover ribbons for compensation history
+    </div>
+    <div class="legend-shelf" id="legend"></div>
+  </div>
+</div>
+
+<div id="tooltip">
+  <div class="tt-name" id="tt-name"></div>
+  <div class="tt-role" id="tt-role"></div>
+  <div class="tt-stat"><span>Quarterly Rate:</span> <span class="tt-val" id="tt-comp"></span></div>
+  <div class="tt-stat"><span>Company Total:</span> <span class="tt-val" id="tt-total" style="color:#ffffff;"></span></div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+/* =========================================================================
+   1. DATASET DEFINITION (10 Years: 2015 Q1 – 2024 Q4 = 40 Quarters)
+   ========================================================================= */
+const NUM_QUARTERS = 40;
+const quarters = [];
+for (let i = 0; i < NUM_QUARTERS; i++) {
+  const yr = 2015 + Math.floor(i / 4);
+  const q = (i % 4) + 1;
+  quarters.push({ i, label: `${yr} Q${q}`, yr, q });
+}
+
+const PALETTE = [
+  "#92c5fe", "#1d4ed8", "#f9572b", "#10b981", "#06d6a0", "#64748b",
+  "#fba354", "#d946ef", "#e879f9", "#ef4444", "#60a5fa", "#059669",
+  "#047857", "#065f46", "#10b981", "#a855f7", "#c084fc", "#2563eb",
+  "#f97316", "#38bdf8"
+];
+
+const EMPLOYEES = [
+  { id: "alice", name: "Alice Chen", role: "Co-Founder & CTO", start: 0, end: 39, base: 140, growth: 3.8, bonusMult: 1.45, labelQ: 20 },
+  { id: "bob", name: "Bob Miller", role: "Principal Architect", intervals: [[0, 16, 115, 2.8], [32, 39, 250, 4.5]], bonusMult: 1.35, labelQ: 36, tag: "Left & Rejoined" },
+  { id: "charlie", name: "Charlie Davis", role: "Sr. Frontend Lead", start: 0, end: 30, base: 90, growth: 2.1, labelQ: 14, tag: "Laid Off 2022 · Never Returned" },
+  { id: "dana", name: "Dana White", role: "Staff Infra Eng", start: 2, end: 39, base: 100, growth: 2.7, bonusMult: 1.3, labelQ: 22 },
+  { id: "elena", name: "Elena Rostova", role: "VP of Product", intervals: [[4, 20, 105, 3.2], [28, 39, 215, 3.9]], bonusMult: 1.4, labelQ: 30, tag: "Rejoined" },
+  { id: "frank", name: "Frank Zhang", role: "Cloud Contractor", start: 12, end: 17, base: 175, growth: 0.5, labelQ: 15, tag: "Contractor" },
+  { id: "grace", name: "Grace Hopper", role: "Security Specialist", start: 13, end: 18, base: 185, growth: 0.2, labelQ: 16, tag: "Contractor" },
+  { id: "hector", name: "Hector Salamanca", role: "Director of AI", start: 8, end: 39, base: 130, growth: 5.2, bonusMult: 1.5, labelQ: 25, tag: "Fast Climber" },
+  { id: "iris", name: "Iris Murdoch", role: "Design Lead", start: 9, end: 31, base: 92, growth: 1.9, labelQ: 22, tag: "Laid Off 2022" },
+  { id: "jack", name: "Jack Ryan", role: "SecOps Lead", start: 14, end: 39, base: 110, growth: 2.4, bonusMult: 1.25, labelQ: 27 },
+  { id: "kiran", name: "Kiran Patel", role: "Staff Backend", start: 18, end: 39, base: 135, growth: 3.4, bonusMult: 1.35, labelQ: 32 },
+  { id: "luna", name: "Luna Lovegood", role: "QA Director", start: 8, end: 32, base: 95, growth: 1.8, labelQ: 20, tag: "Laid Off 2023" },
+  { id: "marcus", name: "Marcus Vance", role: "VP of Engineering", start: 22, end: 39, base: 260, growth: 3.4, bonusMult: 1.4, labelQ: 26 },
+  { id: "nina", name: "Nina Simone", role: "Lead LLM Scientist", start: 32, end: 39, base: 250, growth: 5.5, labelQ: 37, tag: "AI Wave" },
+  { id: "oscar", name: "Oscar Isaac", role: "Fullstack Eng", start: 24, end: 31, base: 120, growth: 1.6, labelQ: 28, tag: "Laid Off 2022" },
+  { id: "penny", name: "Penny Lane", role: "Growth Platforms", start: 26, end: 39, base: 125, growth: 2.5, bonusMult: 1.2, labelQ: 34 }
+];
+
+EMPLOYEES.forEach((emp, i) => { emp.color = PALETTE[i % PALETTE.length]; });
+
+const rawMatrix = quarters.map((q, t) => {
+  const row = { qIndex: t, quarter: q, values: {}, total: 0 };
+  EMPLOYEES.forEach(emp => {
+    let sal = 0;
+    if (emp.intervals) {
+      emp.intervals.forEach(([s, e, b, g]) => {
+        if (t >= s && t <= e) sal = b + (t - s) * g;
+      });
+    } else {
+      if (t >= emp.start && t <= emp.end) sal = emp.base + (t - emp.start) * emp.growth;
+    }
+    if (sal > 0 && t >= 24 && t <= 27) sal *= (emp.bonusMult || 1.3);
+    row.values[emp.id] = sal;
+    row.total += sal;
+  });
+  return row;
+});
+
+const GHOST_HEIGHT = 0.6;
+const everActive = {};
+EMPLOYEES.forEach(e => everActive[e.id] = false);
+
+const displayMatrix = quarters.map((q, t) => {
+  const row = {};
+  EMPLOYEES.forEach(emp => {
+    const trueVal = rawMatrix[t].values[emp.id];
+    if (trueVal > 0) { everActive[emp.id] = true; row[emp.id] = trueVal; }
+    else if (everActive[emp.id]) row[emp.id] = GHOST_HEIGHT;
+    else row[emp.id] = 0;
+  });
+  return row;
+});
+
+/* =========================================================================
+   2. MONOTONIC HERMITE SPLINE SAMPLING + TAPERED LEAD-IN + STACKING
+   -------------------------------------------------------------------------
+   FIX #1 (WHITE SPACE): a virtual "zero quarter" is prepended to every
+   series before the real timeline starts. This makes ALL ribbons
+   organically converge to a single point at the far left — exactly like
+   the Highcharts Olympic reference — instead of starting with an abrupt
+   flat edge and leaving a large, awkward blank area around the thin
+   early section of the stream.
+   ========================================================================= */
+const NUM_STEPS = 160;
+const NUM_SERIES = EMPLOYEES.length;
+const TOTAL_WIDTH = 135;
+const HEIGHT_SCALE = 0.024;
+const Z_TOTAL_SPAN = 22;
+const Z_STEP = Z_TOTAL_SPAN / NUM_SERIES;
+
+const EXT_LEAD_QUARTERS = 2; // virtual "zero" quarters prepended for the taper tip
+const EXT_QUARTERS = NUM_QUARTERS + EXT_LEAD_QUARTERS;
+
+// Converts a REAL quarter index (0..39) to normalized X (0..1) in the
+// extended/tapered coordinate space used by the geometry & ticks.
+function quarterToNormX(qIndexReal) {
+  return (qIndexReal + EXT_LEAD_QUARTERS) / (EXT_QUARTERS - 1);
+}
+// Inverse: normalized X -> nearest REAL quarter index (clamped)
+function normXToRealQuarter(normX) {
+  const extIdx = normX * (EXT_QUARTERS - 1);
+  const realIdx = Math.round(extIdx - EXT_LEAD_QUARTERS);
+  return Math.max(0, Math.min(NUM_QUARTERS - 1, realIdx));
+}
+
+function computeMonotonicTangents(ys) {
+  const n = ys.length;
+  const d = new Array(n - 1);
+  for (let i = 0; i < n - 1; i++) d[i] = ys[i + 1] - ys[i];
+
+  const m = new Array(n);
+  m[0] = d[0];
+  m[n - 1] = d[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    if (d[i - 1] === 0 || d[i] === 0 || (d[i - 1] > 0) !== (d[i] > 0)) m[i] = 0;
+    else m[i] = (d[i - 1] + d[i]) / 2;
+  }
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+    const a = m[i] / d[i], b = m[i + 1] / d[i];
+    const s = a * a + b * b;
+    if (s > 9) { const t = 3 / Math.sqrt(s); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; }
+  }
+  return m;
+}
+
+function hermite(y0, y1, m0, m1, t) {
+  const t2 = t * t, t3 = t2 * t;
+  const h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2;
+  return h00 * y0 + h10 * m0 + h01 * y1 + h11 * m1;
+}
+
+function getSplineSamples(key) {
+  const ys = new Array(EXT_LEAD_QUARTERS).fill(0); // taper: virtual zero quarters
+  for (let t = 0; t < NUM_QUARTERS; t++) ys.push(displayMatrix[t][key]);
+  const m = computeMonotonicTangents(ys);
+
+  const pts = [];
+  for (let step = 0; step <= NUM_STEPS; step++) {
+    const normX = step / NUM_STEPS;
+    const scaledIdx = normX * (EXT_QUARTERS - 1);
+    let seg = Math.floor(scaledIdx);
+    if (seg >= EXT_QUARTERS - 1) seg = EXT_QUARTERS - 2;
+    const t = scaledIdx - seg;
+    const y = hermite(ys[seg], ys[seg + 1], m[seg], m[seg + 1], t);
+    pts.push(new THREE.Vector2(normX, Math.max(0, y)));
+  }
+  return pts;
+}
+
+const sampledSeries = EMPLOYEES.map(emp => getSplineSamples(emp.id));
+
+const stackBottom = Array.from({ length: NUM_SERIES }, () => []);
+const stackTop = Array.from({ length: NUM_SERIES }, () => []);
+
+for (let step = 0; step <= NUM_STEPS; step++) {
+  let totalH = 0;
+  for (let s = 0; s < NUM_SERIES; s++) totalH += Math.max(0, sampledSeries[s][step].y);
+
+  const normX = sampledSeries[0][step].x;
+  const x = (normX - 0.5) * TOTAL_WIDTH;
+  let currentY = -totalH / 2;
+
+  for (let s = 0; s < NUM_SERIES; s++) {
+    const val = Math.max(0, sampledSeries[s][step].y);
+    stackBottom[s].push(new THREE.Vector2(x, currentY * HEIGHT_SCALE));
+    currentY += val;
+    stackTop[s].push(new THREE.Vector2(x, currentY * HEIGHT_SCALE));
+  }
+}
+
+/* =========================================================================
+   3. THREE.JS RENDERER & SCENE SETUP
+   ========================================================================= */
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+
+const camera = new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 1, 1000);
+camera.position.set(-81, 42, 117);
+
+const renderer = new THREE.WebGLRenderer({
+  antialias: true, alpha: false, preserveDrawingBuffer: true, logarithmicDepthBuffer: true
+});
+renderer.setClearColor(0xf8fafc, 1.0);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
+renderer.domElement.style.display = 'block';
+container.appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(window.innerWidth, window.innerHeight);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0px';
+labelRenderer.domElement.style.left = '0px';
+labelRenderer.domElement.style.pointerEvents = 'none';
+container.appendChild(labelRenderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.target.set(0, -1, 0);
+controls.minDistance = 30;
+controls.maxDistance = 320;
+controls.maxPolarAngle = Math.PI / 2 + 0.05;
+
+scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+
+const keyLight = new THREE.DirectionalLight(0xfffbeb, 2.2);
+keyLight.position.set(-52, 65, 68);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.near = 10;
+keyLight.shadow.camera.far = 260;
+const d = 85;
+keyLight.shadow.camera.left = -d;
+keyLight.shadow.camera.right = d;
+keyLight.shadow.camera.top = d;
+keyLight.shadow.camera.bottom = -d;
+keyLight.shadow.bias = -0.0003;
+scene.add(keyLight);
+
+const fillLight = new THREE.DirectionalLight(0xc7d2fe, 0.9);
+fillLight.position.set(68, -10, -60);
+scene.add(fillLight);
+
+const rimLight = new THREE.DirectionalLight(0xffffff, 0.7);
+rimLight.position.set(0, 30, -75);
+scene.add(rimLight);
+
+const shadowPlaneGeo = new THREE.PlaneGeometry(360, 360);
+const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.1 });
+const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
+shadowPlane.rotation.x = -Math.PI / 2;
+shadowPlane.position.y = -22;
+shadowPlane.receiveShadow = true;
+scene.add(shadowPlane);
+
+const gridHelper = new THREE.GridHelper(240, 60, 0x94a3b8, 0xe2e8f0);
+gridHelper.position.y = -22.05;
+scene.add(gridHelper);
+
+/* =========================================================================
+   4. VOLUMETRIC 3D PARAMETRIC RIBBON GEOMETRY (with taper + truncation)
+   ========================================================================= */
+const ribbonMeshes = [];
+const ribbonGroup = new THREE.Group();
+scene.add(ribbonGroup);
+
+const HEIGHT_EPS = 0.0008;
+
+EMPLOYEES.forEach((emp, s) => {
+  let firstActiveIdx = 0;
+  while (
+    firstActiveIdx < NUM_STEPS &&
+    (stackTop[s][firstActiveIdx].y - stackBottom[s][firstActiveIdx].y) < HEIGHT_EPS
+  ) firstActiveIdx++;
+  if (firstActiveIdx >= NUM_STEPS) return;
+
+  const ribbonDepth = 1.5;
+  const zCenter3D = (s - NUM_SERIES / 2) * Z_STEP;
+  const zFront = ribbonDepth / 2;
+  const zBack = -ribbonDepth / 2;
+
+  const positions = [], normals = [], uvs = [], indices = [];
+  let vertCount = 0;
+
+  function addQuad(p1, p2, p3, p4, norm) {
+    positions.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z, p4.x, p4.y, p4.z);
+    for (let k = 0; k < 4; k++) normals.push(norm.x, norm.y, norm.z);
+    uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+    indices.push(vertCount, vertCount + 1, vertCount + 2, vertCount, vertCount + 2, vertCount + 3);
+    vertCount += 4;
+  }
+
+  for (let i = firstActiveIdx; i < NUM_STEPS; i++) {
+    const b0 = stackBottom[s][i], b1 = stackBottom[s][i + 1];
+    const t0 = stackTop[s][i], t1 = stackTop[s][i + 1];
+
+    addQuad(
+      new THREE.Vector3(b0.x, b0.y, zFront), new THREE.Vector3(b1.x, b1.y, zFront),
+      new THREE.Vector3(t1.x, t1.y, zFront), new THREE.Vector3(t0.x, t0.y, zFront),
+      new THREE.Vector3(0, 0, 1)
+    );
+    addQuad(
+      new THREE.Vector3(b1.x, b1.y, zBack), new THREE.Vector3(b0.x, b0.y, zBack),
+      new THREE.Vector3(t0.x, t0.y, zBack), new THREE.Vector3(t1.x, t1.y, zBack),
+      new THREE.Vector3(0, 0, -1)
+    );
+    const topNorm = new THREE.Vector3(-(t1.y - t0.y), t1.x - t0.x, 0).normalize();
+    addQuad(
+      new THREE.Vector3(t0.x, t0.y, zFront), new THREE.Vector3(t1.x, t1.y, zFront),
+      new THREE.Vector3(t1.x, t1.y, zBack), new THREE.Vector3(t0.x, t0.y, zBack), topNorm
+    );
+    const botNorm = new THREE.Vector3(b1.y - b0.y, -(b1.x - b0.x), 0).normalize();
+    addQuad(
+      new THREE.Vector3(b1.x, b1.y, zFront), new THREE.Vector3(b0.x, b0.y, zFront),
+      new THREE.Vector3(b0.x, b0.y, zBack), new THREE.Vector3(b1.x, b1.y, zBack), botNorm
+    );
+  }
+
+  const startB = stackBottom[s][firstActiveIdx], startT = stackTop[s][firstActiveIdx];
+  addQuad(
+    new THREE.Vector3(startB.x, startB.y, zBack), new THREE.Vector3(startB.x, startB.y, zFront),
+    new THREE.Vector3(startT.x, startT.y, zFront), new THREE.Vector3(startT.x, startT.y, zBack),
+    new THREE.Vector3(-1, 0, 0)
+  );
+
+  const endB = stackBottom[s][NUM_STEPS], endT = stackTop[s][NUM_STEPS];
+  addQuad(
+    new THREE.Vector3(endB.x, endB.y, zFront), new THREE.Vector3(endB.x, endB.y, zBack),
+    new THREE.Vector3(endT.x, endT.y, zBack), new THREE.Vector3(endT.x, endT.y, zFront),
+    new THREE.Vector3(1, 0, 0)
+  );
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geom.setIndex(indices);
+  geom.computeVertexNormals();
+
+  /* FIX #3 (HOVER ANIMATION): material is transparent with a self-color
+     emissive channel so we can smoothly dim/glow it on hover. */
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(emp.color),
+    roughness: 0.28,
+    metalness: 0.1,
+    clearcoat: 0.7,
+    clearcoatRoughness: 0.2,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 1,
+    emissive: new THREE.Color(emp.color),
+    emissiveIntensity: 0
+  });
+
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.position.z = zCenter3D;
+
+  mesh.userData = {
+    emp, s,
+    z3D: zCenter3D,
+    z2D: s * 0.005,
+    baseColor: emp.color,
+    currentLift: 0,
+    targetLift: 0,
+    targetOpacity: 1,
+    targetEmissive: 0
+  };
+
+  ribbonGroup.add(mesh);
+  ribbonMeshes.push(mesh);
+
+  if (emp.labelQ !== undefined) {
+    const stepIdx = Math.round(quarterToNormX(emp.labelQ) * NUM_STEPS);
+    const posX = stackBottom[s][stepIdx].x;
+    const posY = (stackBottom[s][stepIdx].y + stackTop[s][stepIdx].y) / 2;
+    const div = document.createElement('div');
+    div.className = 'employee-tag';
+    div.textContent = emp.name;
+    const labelObj = new CSS2DObject(div);
+    labelObj.position.set(posX, posY, zFront + 0.3);
+    mesh.add(labelObj);
+  }
+
+  if (!emp.intervals && emp.end < NUM_QUARTERS - 1) {
+    const stepIdx = Math.round(quarterToNormX(emp.end) * NUM_STEPS);
+    const posX = stackBottom[s][stepIdx].x;
+    const posY = (stackBottom[s][stepIdx].y + stackTop[s][stepIdx].y) / 2;
+    const div = document.createElement('div');
+    div.className = 'employee-tag ghost';
+    div.textContent = `${emp.name} ✗`;
+    const labelObj = new CSS2DObject(div);
+    labelObj.position.set(posX, posY + 0.6, zFront + 0.3);
+    mesh.add(labelObj);
+  }
+});
+
+/* =========================================================================
+   5. TIMELINE AXIS
+   ========================================================================= */
+quarters.forEach((q, i) => {
+  if (i % 4 === 0 || i === NUM_QUARTERS - 1) {
+    const x = (quarterToNormX(i) - 0.5) * TOTAL_WIDTH;
+
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(x, -22, -Z_TOTAL_SPAN / 2 - 3),
+      new THREE.Vector3(x, -22, Z_TOTAL_SPAN / 2 + 5)
+    ]);
+    scene.add(new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0xcfd8dc })));
+
+    const div = document.createElement('div');
+    div.className = 'axis-label';
+    div.textContent = `${q.yr} Q1`;
+    const labelObj = new CSS2DObject(div);
+    labelObj.position.set(x, -22.2, Z_TOTAL_SPAN / 2 + 7);
+    scene.add(labelObj);
+  }
+});
+
+/* =========================================================================
+   6. FIX #2 — HIGHCHARTS-STYLE MILESTONE ANNOTATIONS
+   -------------------------------------------------------------------------
+   Boxes are plain fixed-position DOM elements pinned to ONE ROW below the
+   header. Every frame we project each milestone's 3D world anchor to 2D
+   screen space, then run a simple left-to-right collision-avoidance pass
+   so boxes physically cannot overlap — regardless of camera orbit/zoom.
+   Thin SVG lines connect each box down to its live anchor point, exactly
+   like the Highcharts reference.
+   ========================================================================= */
+const MILESTONES = [
+  { q: 14, yPeak: 14, year: "2018", title: "Contractor Sprint", text: "Rapid cloud migration & contractor influx" },
+  { q: 21, yPeak: 11, year: "2020", title: "Pandemic Shift", text: "Remote workplace pivot, comp freeze implemented" },
+  { q: 26, yPeak: 24, year: "2021", title: "Tech Unicorn Boom", text: "Record capital injection & bonuses up to +45%" },
+  { q: 31, yPeak: 16, year: "2022", title: "Market Correction", text: "Workforce downsizing: 30% staff reduction" },
+  { q: 36, yPeak: 21, year: "2024", title: "Generative AI Era", text: "Principal LLM scientists hired & key re-acquisitions" }
+];
+
+const connectorSvg = document.getElementById('connector-svg');
+const milestoneItems = MILESTONES.map(m => {
+  const x = (quarterToNormX(m.q) - 0.5) * TOTAL_WIDTH;
+  const z = Z_TOTAL_SPAN / 2 + 3.5;
+  const worldPos = new THREE.Vector3(x, m.yPeak, z);
+
+  const box = document.createElement('div');
+  box.className = 'hc-callout';
+  box.innerHTML = `<strong>${m.title}</strong><span>${m.text}</span>`;
+  document.body.appendChild(box);
+
+  const ns = "http://www.w3.org/2000/svg";
+  const line = document.createElementNS(ns, 'line');
+  connectorSvg.appendChild(line);
+  const circle = document.createElementNS(ns, 'circle');
+  circle.setAttribute('r', 3.2);
+  connectorSvg.appendChild(circle);
+
+  return { m, worldPos, box, line, circle };
+});
+
+let calloutRowTop = 130;
+function recomputeCalloutRowTop() {
+  const headerEl = document.querySelector('.header');
+  if (headerEl) calloutRowTop = headerEl.getBoundingClientRect().bottom + 18;
+}
+recomputeCalloutRowTop();
+window.addEventListener('resize', recomputeCalloutRowTop);
+
+const _projVec = new THREE.Vector3();
+function projectToScreen(worldPos) {
+  _projVec.copy(worldPos).project(camera);
+  return {
+    x: (_projVec.x * 0.5 + 0.5) * window.innerWidth,
+    y: (-_projVec.y * 0.5 + 0.5) * window.innerHeight,
+    visible: _projVec.z < 1
+  };
+}
+
+const BOX_WIDTH = 148;
+const BOX_MARGIN = 10;
+
+function updateMilestoneOverlay() {
+  const rows = milestoneItems.map(item => {
+    const p = projectToScreen(item.worldPos);
+    return { item, ...p };
+  });
+
+  // Sort left-to-right, then greedily push overlapping boxes apart
+  rows.sort((a, b) => a.x - b.x);
+  let lastRight = -Infinity;
+  rows.forEach(r => {
+    let left = r.x - BOX_WIDTH / 2;
+    if (left < lastRight + BOX_MARGIN) left = lastRight + BOX_MARGIN;
+    const minLeft = 12, maxLeft = window.innerWidth - BOX_WIDTH - 12;
+    left = Math.max(minLeft, Math.min(maxLeft, left));
+    lastRight = left + BOX_WIDTH;
+    r.boxCenterX = left + BOX_WIDTH / 2;
+  });
+
+  rows.forEach(r => {
+    const { item, visible, x: anchorX, y: anchorY, boxCenterX } = r;
+    item.box.style.left = `${boxCenterX}px`;
+    item.box.style.top = `${calloutRowTop}px`;
+    item.box.classList.toggle('visible', visible);
+
+    const boxBottomY = calloutRowTop + item.box.offsetHeight;
+    item.line.setAttribute('x1', boxCenterX);
+    item.line.setAttribute('y1', boxBottomY);
+    item.line.setAttribute('x2', anchorX);
+    item.line.setAttribute('y2', anchorY);
+    item.line.style.opacity = visible ? 0.9 : 0;
+
+    item.circle.setAttribute('cx', anchorX);
+    item.circle.setAttribute('cy', anchorY);
+    item.circle.style.opacity = visible ? 1 : 0;
+  });
+}
+
+/* =========================================================================
+   7. SEAMLESS 2D / 3D CAMERA & DEPTH INTERPOLATION
+   ========================================================================= */
+const viewPresets = {
+  view3D: { camPos: new THREE.Vector3(-81, 42, 117), target: new THREE.Vector3(0, -1, 0), spreadZ: 1.0 },
+  view2D: { camPos: new THREE.Vector3(0, 0, 138), target: new THREE.Vector3(0, 0, 0), spreadZ: 0.0 },
+  top: { camPos: new THREE.Vector3(0, 165, 0.01), target: new THREE.Vector3(0, 0, 0), spreadZ: 1.0 }
+};
+
+let currentSpread = 1.0, targetSpread = 1.0;
+let targetCamPos = camera.position.clone();
+let targetCamFocus = controls.target.clone();
+let isTransitioning = false;
+let is3DMode = true;
+
+function transitionTo(presetName) {
+  const p = viewPresets[presetName];
+  targetCamPos.copy(p.camPos);
+  targetCamFocus.copy(p.target);
+  targetSpread = p.spreadZ;
+  isTransitioning = true;
+  is3DMode = (presetName === 'view3D');
+}
+
+document.getElementById('btn-3d').onclick = (e) => { setActiveBtn(e.currentTarget); transitionTo('view3D'); };
+document.getElementById('btn-2d').onclick = (e) => { setActiveBtn(e.currentTarget); transitionTo('view2D'); };
+document.getElementById('btn-top').onclick = (e) => { setActiveBtn(e.currentTarget); transitionTo('top'); };
+document.getElementById('btn-reset').onclick = () => { transitionTo(is3DMode ? 'view3D' : 'view2D'); };
+
+function setActiveBtn(btn) {
+  document.querySelectorAll('.controls-panel .btn:not(.btn-export)').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+/* =========================================================================
+   8. FIX #3 — RAYCASTING, TOOLTIPS & HIGHCHARTS-STYLE HOVER ANIMATION
+   -------------------------------------------------------------------------
+   Hovering a ribbon smoothly dims every other ribbon, glows + lifts the
+   hovered one, and drives a vertical crosshair guide + anchor dot at the
+   exact hover position — all eased every frame for a fluid feel.
+   ========================================================================= */
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const tooltip = document.getElementById('tooltip');
+const ttName = document.getElementById('tt-name');
+const ttRole = document.getElementById('tt-role');
+const ttComp = document.getElementById('tt-comp');
+const ttTotal = document.getElementById('tt-total');
+let hoveredMesh = null;
+let hoverStepIdx = null;
+let hoverSeriesIdx = null;
+
+function setHoverTargets(hoveredM) {
+  ribbonMeshes.forEach(m => {
+    const isHovered = (m === hoveredM);
+    m.userData.targetOpacity = hoveredM ? (isHovered ? 1 : 0.2) : 1;
+    m.userData.targetEmissive = isHovered ? 0.5 : 0;
+    m.userData.targetLift = isHovered ? 1.15 : 0;
+  });
+}
+
+window.addEventListener('pointermove', (e) => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+  tooltip.style.left = `${e.clientX}px`;
+  tooltip.style.top = `${e.clientY}px`;
+
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(ribbonMeshes);
+
+  if (intersects.length > 0) {
+    const hit = intersects[0];
+    const mesh = hit.object;
+    const emp = mesh.userData.emp;
+
+    if (hoveredMesh !== mesh) {
+      hoveredMesh = mesh;
+      setHoverTargets(mesh);
+      highlightLegend(emp.id);
+    }
+
+    const normX = Math.max(0, Math.min(1, (hit.point.x / TOTAL_WIDTH) + 0.5));
+    hoverStepIdx = Math.round(normX * NUM_STEPS);
+    hoverSeriesIdx = mesh.userData.s;
+
+    const qIdx = normXToRealQuarter(normX);
+    const qData = rawMatrix[qIdx];
+    const sal = qData.values[emp.id] || 0;
+
+    tooltip.style.display = 'block';
+    ttName.innerHTML = `${emp.name} <span style="font-size:10px;color:${emp.color};font-weight:700;">●</span>`;
+    ttRole.textContent = `${emp.role} · ${qData.quarter.label}`;
+    ttComp.textContent = sal > 0 ? `$${Math.round(sal * 1000).toLocaleString()}/yr` : "Inactive / Departed";
+    ttTotal.textContent = `$${Math.round(qData.total * 1000).toLocaleString()}/yr`;
+    document.body.style.cursor = 'pointer';
+  } else {
+    if (hoveredMesh) {
+      hoveredMesh = null;
+      hoverStepIdx = null;
+      hoverSeriesIdx = null;
+      setHoverTargets(null);
+      highlightLegend(null);
+    }
+    tooltip.style.display = 'none';
+    document.body.style.cursor = 'default';
+  }
+});
+
+function highlightLegend(id) {
+  document.querySelectorAll('.legend-chip').forEach(chip => {
+    if (!id) chip.style.opacity = '1';
+    else if (chip.dataset.id === id) { chip.classList.add('active'); chip.style.opacity = '1'; }
+    else { chip.classList.remove('active'); chip.style.opacity = '0.35'; }
+  });
+}
+
+// Vertical crosshair guide + hover marker dot
+const crosshairLineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+const crosshairLineMat = new THREE.LineDashedMaterial({ color: 0x0f172a, dashSize: 0.7, gapSize: 0.45, transparent: true, opacity: 0.4 });
+const crosshairLine = new THREE.Line(crosshairLineGeo, crosshairLineMat);
+crosshairLine.visible = false;
+scene.add(crosshairLine);
+
+const crosshairDotGeo = new THREE.SphereGeometry(0.26, 16, 16);
+const crosshairDotMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5, metalness: 0.3, roughness: 0.2 });
+const crosshairDot = new THREE.Mesh(crosshairDotGeo, crosshairDotMat);
+crosshairDot.visible = false;
+scene.add(crosshairDot);
+
+function updateHoverCrosshair() {
+  if (hoveredMesh == null || hoverStepIdx == null) {
+    crosshairLine.visible = false;
+    crosshairDot.visible = false;
+    return;
+  }
+  const step = hoverStepIdx;
+  const x = stackBottom[0][step].x;
+  const yBottomGlobal = stackBottom[0][step].y;
+  const yTopGlobal = stackTop[NUM_SERIES - 1][step].y;
+  const z = Z_TOTAL_SPAN / 2 + 3.6;
+
+  crosshairLine.geometry.setFromPoints([
+    new THREE.Vector3(x, yBottomGlobal, z),
+    new THREE.Vector3(x, yTopGlobal, z)
+  ]);
+  crosshairLine.computeLineDistances();
+  crosshairLine.visible = true;
+
+  const topOfHoveredSeries = stackTop[hoverSeriesIdx][step].y;
+  crosshairDot.position.set(x, topOfHoveredSeries, z);
+  crosshairDot.visible = true;
+}
+
+/* =========================================================================
+   9. LEGEND SHELF GENERATION
+   ========================================================================= */
+const legendContainer = document.getElementById('legend');
+EMPLOYEES.forEach(emp => {
+  const chip = document.createElement('div');
+  chip.className = 'legend-chip';
+  chip.dataset.id = emp.id;
+  const departedFlag = (!emp.intervals && emp.end < NUM_QUARTERS - 1) ? `<span class="ghost-flag">·left</span>` : '';
+  chip.innerHTML = `<span class="dot" style="background:${emp.color}"></span><span>${emp.name}</span>${departedFlag}`;
+  chip.onmouseenter = () => {
+    const target = ribbonMeshes.find(m => m.userData.emp.id === emp.id);
+    if (target) { hoveredMesh = target; setHoverTargets(target); }
+  };
+  chip.onmouseleave = () => { hoveredMesh = null; setHoverTargets(null); };
+  legendContainer.appendChild(chip);
+});
+
+/* =========================================================================
+   10. HIGH RESOLUTION STANDALONE SVG EXPORTER
+   ========================================================================= */
+document.getElementById('btn-export').addEventListener('click', () => {
+  const svgW = 1600, svgH = 900, padX = 110, padY = 160;
+  const drawW = svgW - padX * 2, drawH = svgH - padY * 2;
+  const centerY = svgH / 2 + 10;
+  const svgScaleY = 0.55;
+
+  let svgContent = `<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgW} ${svgH}" width="${svgW}" height="${svgH}">
+<defs>
+  <linearGradient id="bgLight" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#ffffff"/>
+    <stop offset="100%" stop-color="#f8fafc"/>
+  </linearGradient>
+  <filter id="softGlow" x="-10%" y="-10%" width="120%" height="120%">
+    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.06"/>
+  </filter>
+</defs>
+<rect width="100%" height="100%" fill="url(#bgLight)"/>
+<style>
+  text { font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; }
+  .header-title { font-size: 26px; font-weight: 800; fill: #0f172a; letter-spacing: -0.5px; }
+  .header-sub { font-size: 13px; font-weight: 500; fill: #64748b; }
+  .axis-label { font-size: 11px; font-weight: 600; fill: #64748b; }
+  .milestone-title { font-size: 11px; font-weight: 700; fill: #b45309; }
+  .milestone-sub { font-size: 9.5px; font-weight: 500; fill: #475569; }
+</style>
+<text x="${padX}" y="68" class="header-title">Corporate Payroll Dynamics</text>
+<text x="${padX}" y="92" class="header-sub">10-Year Epoch Streamgraph (2015–2024) &bull; Royal Executive Palette</text>
+<g id="stream-layers" filter="url(#softGlow)">
+`;
+
+  EMPLOYEES.forEach((emp, s) => {
+    let dTop = "", dBot = "";
+    for (let i = 0; i <= NUM_STEPS; i++) {
+      const normX = sampledSeries[0][i].x;
+      const x = padX + normX * drawW;
+      const yTop = centerY + stackTop[s][i].y * (drawH / (TOTAL_WIDTH * HEIGHT_SCALE)) * svgScaleY;
+      const yBot = centerY + stackBottom[s][i].y * (drawH / (TOTAL_WIDTH * HEIGHT_SCALE)) * svgScaleY;
+      if (i === 0) { dTop += `M ${x.toFixed(2)} ${yTop.toFixed(2)}`; dBot = `L ${x.toFixed(2)} ${yBot.toFixed(2)}`; }
+      else { dTop += ` L ${x.toFixed(2)} ${yTop.toFixed(2)}`; dBot = ` L ${x.toFixed(2)} ${yBot.toFixed(2)}` + dBot; }
+    }
+    svgContent += `  <path d="${dTop} ${dBot} Z" fill="${emp.color}" opacity="0.94" stroke="#ffffff" stroke-width="0.8"/>\n`;
+  });
+
+  svgContent += `</g>\n<g id="milestones">\n`;
+  MILESTONES.forEach(m => {
+    const mx = padX + quarterToNormX(m.q) * drawW;
+    svgContent += `  <line x1="${mx}" y1="120" x2="${mx}" y2="${svgH - 100}" stroke="#cbd5e1" stroke-dasharray="4,4" stroke-width="1.2"/>\n`;
+    svgContent += `  <circle cx="${mx}" cy="120" r="4" fill="#b45309"/>\n`;
+    svgContent += `  <text x="${mx}" y="105" text-anchor="middle" class="milestone-title">${m.title}</text>\n`;
+    svgContent += `  <text x="${mx}" y="117" text-anchor="middle" class="milestone-sub">${m.text}</text>\n`;
+  });
+  svgContent += `</g>\n<g id="timeline-axis">\n`;
+  quarters.forEach((q, i) => {
+    if (i % 4 === 0 || i === 39) {
+      const ax = padX + quarterToNormX(i) * drawW;
+      svgContent += `  <text x="${ax}" y="${svgH - 65}" text-anchor="middle" class="axis-label">${q.yr} Q1</text>\n`;
+    }
+  });
+  svgContent += `</g>\n</svg>`;
+
+  const blob = new Blob([svgContent], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `corporate_payroll_streamgraph_${is3DMode ? '3D' : '2D'}.svg`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+/* =========================================================================
+   11. ANIMATION LOOP & RESIZE
+   ========================================================================= */
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (isTransitioning) {
+    camera.position.lerp(targetCamPos, 0.05);
+    controls.target.lerp(targetCamFocus, 0.05);
+    currentSpread += (targetSpread - currentSpread) * 0.05;
+    if (camera.position.distanceTo(targetCamPos) < 0.08 && Math.abs(currentSpread - targetSpread) < 0.005) {
+      isTransitioning = false;
+      currentSpread = targetSpread;
+    }
+  }
+
+  // Always keep ribbon Z aligned to spread + apply smooth hover "lift"/opacity/glow
+  ribbonMeshes.forEach(mesh => {
+    const baseZ = THREE.MathUtils.lerp(mesh.userData.z2D, mesh.userData.z3D, currentSpread);
+    mesh.userData.currentLift = THREE.MathUtils.lerp(mesh.userData.currentLift, mesh.userData.targetLift, 0.15);
+    mesh.position.z = baseZ + mesh.userData.currentLift;
+
+    mesh.material.opacity = THREE.MathUtils.lerp(mesh.material.opacity, mesh.userData.targetOpacity, 0.12);
+    mesh.material.emissiveIntensity = THREE.MathUtils.lerp(mesh.material.emissiveIntensity, mesh.userData.targetEmissive, 0.12);
+  });
+
+  updateMilestoneOverlay();
+  updateHoverCrosshair();
+
+  controls.update();
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  labelRenderer.setSize(window.innerWidth, window.innerHeight);
+  recomputeCalloutRowTop();
+});
+
+animate();
+</script>
+</body>
+</html>
