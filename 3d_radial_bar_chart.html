@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Radial Bar Chart - Trust in Europe</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #f8fafc;
+      user-select: none;
+    }
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    /* Style for CSS2D radial country labels */
+    .country-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #334155;
+      background: rgba(255, 255, 255, 0.85);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      backdrop-filter: blur(4px);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      pointer-events: auto;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    .country-label:hover {
+      background: #2563eb;
+      color: white;
+      transform: scale(1.1);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+      z-index: 1000 !important;
+    }
+    /* Scale value labels along the radial line */
+    .scale-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: #64748b;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+    /* Glassmorphism panel styling */
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+    }
+  </style>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <div id="canvas-container"></div>
+
+  <!-- Header Banner -->
+  <div class="absolute top-4 left-1/2 -translate-x-1/2 z-10 text-center pointer-events-none w-full max-w-xl px-4">
+    <div class="glass-panel py-3 px-6 rounded-2xl pointer-events-auto shadow-sm inline-block w-full sm:w-auto">
+      <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">Trust in others across Europe</h1>
+      <p class="text-xs sm:text-sm text-slate-500 mt-0.5 font-medium">Average rating (0–10), 2013 vs 2025</p>
+    </div>
+  </div>
+
+  <!-- Legend Card (Top Left) -->
+  <div class="absolute top-4 left-4 z-10 hidden sm:block">
+    <div class="glass-panel p-4 rounded-xl shadow-sm text-xs space-y-2.5 w-56">
+      <div class="font-semibold text-slate-700 border-b border-slate-200/60 pb-1.5 flex items-center justify-between">
+        <span>Legend</span>
+        <i class="fa-solid fa-chart-pie text-blue-500"></i>
+      </div>
+      <div class="flex items-center gap-2.5">
+        <span class="w-3.5 h-3.5 rounded bg-blue-600 inline-block shadow-sm"></span>
+        <span class="font-medium text-slate-600">2025 trust (3D Bar)</span>
+      </div>
+      <div class="flex items-center gap-2.5">
+        <span class="w-4 h-1 bg-red-500 rounded inline-block"></span>
+        <span class="font-medium text-slate-600">2013 trust (Line indicator)</span>
+      </div>
+      <div class="flex items-center gap-2.5">
+        <span class="text-blue-600 font-black text-xs">▲</span>
+        <span class="font-medium text-slate-600">Trust increased</span>
+      </div>
+      <div class="flex items-center gap-2.5">
+        <span class="text-red-500 font-black text-xs">▼</span>
+        <span class="font-medium text-slate-600">Trust fell</span>
+      </div>
+      <div class="flex items-center gap-2.5 pt-1 border-t border-slate-200/60">
+        <span class="w-4 h-0.5 border-b-2 border-dashed border-red-400 inline-block"></span>
+        <span class="font-medium text-slate-500 text-[11px]">EU Average 2025</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Control Buttons (Top Right) -->
+  <div class="absolute top-4 right-4 z-10 flex gap-2">
+    <button id="btn-reset" class="glass-panel px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-white hover:text-blue-600 transition flex items-center gap-1.5 shadow-sm">
+      <i class="fa-solid fa-rotate-left"></i> Reset View
+    </button>
+    <button id="btn-rotate" class="glass-panel px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-white hover:text-blue-600 transition flex items-center gap-1.5 shadow-sm">
+      <i class="fa-solid fa-arrows-spin"></i> Auto-Rotate
+    </button>
+    <button id="btn-height" class="glass-panel px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-white hover:text-blue-600 transition flex items-center gap-1.5 shadow-sm">
+      <i class="fa-solid fa-cube"></i> Toggle 3D Height
+    </button>
+  </div>
+
+  <!-- Interactive Tooltip Overlay -->
+  <div id="tooltip" class="absolute pointer-events-none z-30 transition-all duration-150 opacity-0 translate-y-2">
+    <div class="glass-panel p-3.5 rounded-xl shadow-xl border border-white/80 w-52 text-slate-800">
+      <div id="tooltip-country" class="font-bold text-sm text-slate-900 border-b border-slate-200/60 pb-1 flex justify-between items-center">
+        <span>France</span>
+        <span id="tooltip-delta-badge" class="text-[10px] px-1.5 py-0.5 rounded font-bold bg-green-100 text-green-700">+0.4</span>
+      </div>
+      <div class="mt-2 space-y-1 text-xs">
+        <div class="flex justify-between items-center">
+          <span class="text-slate-500">2025 Score:</span>
+          <span id="tooltip-2025" class="font-bold text-blue-600">6.8</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-slate-500">2013 Score:</span>
+          <span id="tooltip-2013" class="font-bold text-red-500">6.4</span>
+        </div>
+        <div class="flex justify-between items-center pt-1 border-t border-slate-100">
+          <span class="text-slate-500">Trend:</span>
+          <span id="tooltip-status" class="font-semibold text-blue-600">Increased</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Attribution Footer -->
+  <div class="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 text-slate-400 text-[11px] font-medium tracking-wide">
+    Source: <span class="text-slate-600 underline cursor-pointer">Eurostat</span> • Built with Three.js & WebGL
+  </div>
+
+  <script>
+    // Data extracted from standard Eurostat European Trust survey (0-10 scale)
+    const dataset = [
+      { country: "France", score2013: 5.1, score2025: 5.8 },
+      { country: "Croatia", score2013: 4.8, score2025: 6.2 },
+      { country: "Romania", score2013: 5.3, score2025: 6.5 },
+      { country: "Poland", score2013: 6.0, score2025: 7.1 },
+      { country: "Slovakia", score2013: 5.4, score2025: 6.6 },
+      { country: "Ireland", score2013: 6.2, score2025: 7.2 },
+      { country: "Italy", score2013: 5.8, score2025: 6.3 },
+      { country: "Latvia", score2013: 5.2, score2025: 6.1 },
+      { country: "Belgium", score2013: 6.1, score2025: 6.7 },
+      { country: "Serbia", score2013: 4.5, score2025: 5.2 },
+      { country: "Spain", score2013: 5.8, score2025: 6.4 },
+      { country: "Finland", score2013: 7.4, score2025: 7.8 },
+      { country: "Luxembourg", score2013: 6.8, score2025: 7.1 },
+      { country: "Netherlands", score2013: 6.7, score2025: 7.3 },
+      { country: "Bulgaria", score2013: 4.2, score2025: 4.9 },
+      { country: "Czechia", score2013: 5.6, score2025: 6.3 },
+      { country: "Greece", score2013: 4.0, score2025: 4.6 },
+      { country: "Germany", score2013: 6.6, score2025: 6.5 },
+      { country: "Estonia", score2013: 6.1, score2025: 6.9 },
+      { country: "Hungary", score2013: 5.0, score2025: 5.3 },
+      { country: "Portugal", score2013: 4.8, score2025: 5.7 },
+      { country: "Norway", score2013: 7.3, score2025: 7.6 },
+      { country: "Austria", score2013: 6.4, score2025: 6.8 },
+      { country: "Denmark", score2013: 7.5, score2025: 7.9 },
+      { country: "Lithuania", score2013: 5.5, score2025: 6.4 },
+      { country: "Malta", score2013: 5.6, score2025: 5.8 },
+      { country: "Sweden", score2013: 6.9, score2025: 7.2 },
+      { country: "Slovenia", score2013: 5.0, score2025: 5.5 },
+      { country: "Cyprus", score2013: 4.7, score2025: 5.1 },
+      { country: "Türkiye", score2013: 4.9, score2025: 4.3 }
+    ];
+
+    const EU_AVG_2025 = 6.2;
+    const INNER_RADIUS = 3.5;
+    const RADIUS_PER_UNIT = 0.8; // Radius span per 1 rating score point
+    const MAX_RATING = 10;
+    const CHART_OUTER_RADIUS = INNER_RADIUS + (MAX_RATING * RADIUS_PER_UNIT);
+
+    // Global Three.js scene variables
+    let scene, camera, renderer, labelRenderer, controls;
+    let interactiveMeshes = [];
+    let barGroup, markersGroup, guideGroup, labelsGroup;
+    let hoveredMesh = null;
+    let use3dHeight = true;
+    let isAutoRotating = false;
+
+    // Raycaster for mouse interaction
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2(-1000, -1000);
+
+    function init() {
+      const container = document.getElementById('canvas-container');
+
+      // Scene
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf8fafc); // Clean white/off-white background
+      scene.fog = new THREE.FogExp2(0xf8fafc, 0.015);
+
+      // Camera
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 22, 24);
+
+      // WebGL Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      container.appendChild(renderer.domElement);
+
+      // CSS2D Renderer for Crisp HTML Radial Labels
+      labelRenderer = new THREE.CSS2DRenderer();
+      labelRenderer.setSize(window.innerWidth, window.innerHeight);
+      labelRenderer.domElement.style.position = 'absolute';
+      labelRenderer.domElement.style.top = '0px';
+      labelRenderer.domElement.style.pointerEvents = 'none';
+      container.appendChild(labelRenderer.domElement);
+
+      // Orbit Controls
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.maxPolarAngle = Math.PI / 2.05; // Prevent camera going below ground plane
+      controls.minDistance = 10;
+      controls.maxDistance = 50;
+      controls.target.set(0, 0, 0);
+
+      // Lighting Setup
+      setupLighting();
+
+      // Groups
+      barGroup = new THREE.Group();
+      markersGroup = new THREE.Group();
+      guideGroup = new THREE.Group();
+      labelsGroup = new THREE.Group();
+
+      scene.add(barGroup);
+      scene.add(markersGroup);
+      scene.add(guideGroup);
+      scene.add(labelsGroup);
+
+      // Build 3D Visualization Elements
+      buildGroundGrid();
+      buildCircularGuides();
+      buildRadialBars();
+
+      // Event Listeners
+      window.addEventListener('resize', onWindowResize);
+      window.addEventListener('mousemove', onMouseMove);
+
+      // Button Controls
+      document.getElementById('btn-reset').addEventListener('click', resetCamera);
+      document.getElementById('btn-rotate').addEventListener('click', toggleAutoRotate);
+      document.getElementById('btn-height').addEventListener('click', toggle3DHeight);
+
+      // Dynamic Entrance Animation
+      animateEntrance();
+
+      // Render Loop
+      animate();
+    }
+
+    function setupLighting() {
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+      scene.add(ambientLight);
+
+      const mainLight = new THREE.DirectionalLight(0xffffff, 0.85);
+      mainLight.position.set(15, 25, 15);
+      mainLight.castShadow = true;
+      mainLight.shadow.mapSize.width = 2048;
+      mainLight.shadow.mapSize.height = 2048;
+      mainLight.shadow.camera.near = 0.5;
+      mainLight.shadow.camera.far = 60;
+      const d = 16;
+      mainLight.shadow.camera.left = -d;
+      mainLight.shadow.camera.right = d;
+      mainLight.shadow.camera.top = d;
+      mainLight.shadow.camera.bottom = -d;
+      mainLight.shadow.bias = -0.0005;
+      scene.add(mainLight);
+
+      const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.35); // Soft blue rim light
+      fillLight.position.set(-15, 15, -15);
+      scene.add(fillLight);
+    }
+
+    function buildCircularGuides() {
+      // Scale concentric rings (0, 2, 4, 6, 8, 10)
+      const scaleTicks = [2, 4, 6, 8, 10];
+      
+      scaleTicks.forEach(val => {
+        const radius = INNER_RADIUS + (val * RADIUS_PER_UNIT);
+        const ringGeo = new THREE.BufferGeometry();
+        const points = [];
+        const segments = 128;
+
+        for (let i = 0; i <= segments; i++) {
+          const theta = (i / segments) * Math.PI * 2;
+          points.push(new THREE.Vector3(Math.cos(theta) * radius, 0, Math.sin(theta) * radius));
+        }
+        ringGeo.setFromPoints(points);
+
+        const ringMat = new THREE.LineDashedMaterial({
+          color: 0xcbd5e1,
+          dashSize: 0.2,
+          gapSize: 0.15,
+          linewidth: 1
+        });
+
+        const line = new THREE.Line(ringGeo, ringMat);
+        line.computeLineDistances();
+        guideGroup.add(line);
+
+        // Numeric radial scale label along vertical axis (0 - 10)
+        const scaleLabelDiv = document.createElement('div');
+        scaleLabelDiv.className = 'scale-label';
+        scaleLabelDiv.textContent = val;
+        const scaleLabelObj = new THREE.CSS2DObject(scaleLabelDiv);
+        scaleLabelObj.position.set(0, 0.1, -radius);
+        guideGroup.add(scaleLabelObj);
+      });
+
+      // Special Dashed EU Average Ring (6.2)
+      const euRadius = INNER_RADIUS + (EU_AVG_2025 * RADIUS_PER_UNIT);
+      const euRingGeo = new THREE.BufferGeometry();
+      const euPoints = [];
+      const segs = 128;
+      for (let i = 0; i <= segs; i++) {
+        const theta = (i / segs) * Math.PI * 2;
+        euPoints.push(new THREE.Vector3(Math.cos(theta) * euRadius, 0.02, Math.sin(theta) * euRadius));
+      }
+      euRingGeo.setFromPoints(euPoints);
+      const euMat = new THREE.LineDashedMaterial({
+        color: 0xef4444, // Red dashed ring
+        dashSize: 0.3,
+        gapSize: 0.2,
+        linewidth: 2
+      });
+      const euLine = new THREE.Line(euRingGeo, euMat);
+      euLine.computeLineDistances();
+      guideGroup.add(euLine);
+
+      // "EU average 2025" curved tag label
+      const euDiv = document.createElement('div');
+      euDiv.className = 'text-[10px] font-bold text-red-500 bg-white/90 px-1.5 py-0.5 rounded border border-red-200 shadow-sm';
+      euDiv.textContent = 'EU average 2025';
+      const euLabelObj = new THREE.CSS2DObject(euDiv);
+      // Position around top-left arc
+      const angleEU = -Math.PI * 0.72;
+      euLabelObj.position.set(Math.cos(angleEU) * euRadius, 0.1, Math.sin(angleEU) * euRadius);
+      guideGroup.add(euLabelObj);
+    }
+
+    function buildRadialBars() {
+      const count = dataset.length;
+      const angleStep = (Math.PI * 2) / count;
+
+      // Blue polished material for 2025 extruded bars
+      const barMaterial = new THREE.MeshStandardMaterial({
+        color: 0x2563eb,
+        roughness: 0.2,
+        metalness: 0.1,
+        shadowSide: THREE.DoubleSide
+      });
+
+      // Red material for 2013 threshold markers
+      const redMarkerMaterial = new THREE.MeshBasicMaterial({ color: 0xdc2626 });
+
+      // Arrow Geometries (3D Cone Triangles)
+      const arrowUpGeo = new THREE.ConeGeometry(0.18, 0.35, 3);
+      arrowUpGeo.rotateX(Math.PI / 2); // Lay flat horizontally pointing outward
+      const arrowDownGeo = new THREE.ConeGeometry(0.18, 0.35, 3);
+      arrowDownGeo.rotateX(-Math.PI / 2); // Point inward
+
+      const arrowBlueMat = new THREE.MeshBasicMaterial({ color: 0x2563eb });
+      const arrowRedMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+
+      dataset.forEach((data, index) => {
+        // Compute sector angles (with spacing)
+        const angleCenter = index * angleStep - Math.PI / 2;
+        const angleWidth = angleStep * 0.62; // Angular bar width
+        const startAngle = angleCenter - angleWidth / 2;
+        const endAngle = angleCenter + angleWidth / 2;
+
+        const score2025 = data.score2025;
+        const score2013 = data.score2013;
+        const outerRadius2025 = INNER_RADIUS + (score2025 * RADIUS_PER_UNIT);
+        const outerRadius2013 = INNER_RADIUS + (score2013 * RADIUS_PER_UNIT);
+
+        // 1. Create Extruded 2025 Arc Wedge Geometry
+        const barHeight = 0.5; // Thickness in Y
+        const shape = new THREE.Shape();
+
+        // Inner arc to outer arc geometry shape
+        const segments = 12;
+        shape.absarc(0, 0, INNER_RADIUS, startAngle, endAngle, false);
+        
+        // Outer arc (Points going backwards)
+        const outerPoints = [];
+        for (let i = segments; i >= 0; i--) {
+          const a = startAngle + (endAngle - startAngle) * (i / segments);
+          outerPoints.push(new THREE.Vector2(Math.cos(a) * outerRadius2025, Math.sin(a) * outerRadius2025));
+        }
+        outerPoints.forEach(pt => shape.lineTo(pt.x, pt.y));
+        shape.closePath();
+
+        const extrudeSettings = {
+          depth: barHeight,
+          bevelEnabled: true,
+          bevelSegments: 3,
+          steps: 1,
+          bevelSize: 0.03,
+          bevelThickness: 0.03
+        };
+
+        const barGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        barGeo.rotateX(Math.PI / 2); // Orient horizontal on X-Z plane
+
+        const barMesh = new THREE.Mesh(barGeo, barMaterial.clone());
+        barMesh.position.y = barHeight;
+        barMesh.castShadow = true;
+        barMesh.receiveShadow = true;
+
+        // Store custom properties on mesh for interaction
+        barMesh.userData = {
+          data: data,
+          index: index,
+          initialScaleR: 1,
+          targetRadius: outerRadius2025,
+          angleCenter: angleCenter
+        };
+
+        barGroup.add(barMesh);
+        interactiveMeshes.push(barMesh);
+
+        // 2. Add 2013 Score Marker (Red Arc Line Indicator)
+        const markerArcShape = new THREE.Path();
+        markerArcShape.absarc(0, 0, outerRadius2013, startAngle, endAngle, false);
+        const markerPoints = markerArcShape.getPoints(12);
+        const markerGeo = new THREE.BufferGeometry().setFromPoints(markerPoints);
+
+        const markerLine = new THREE.Line(
+          markerGeo,
+          new THREE.LineBasicMaterial({ color: 0xef4444, linewidth: 3 })
+        );
+        markerLine.rotation.x = Math.PI / 2;
+        markerLine.position.y = barHeight + 0.06; // Slightly above bar top
+        markersGroup.add(markerLine);
+
+        // 3. Add Increase / Decrease Triangle Indicator outside chart perimeter
+        const isIncrease = score2025 >= score2013;
+        const arrowRadius = CHART_OUTER_RADIUS + 0.55;
+        const arrowMesh = new THREE.Mesh(
+          isIncrease ? arrowUpGeo : arrowDownGeo,
+          isIncrease ? arrowBlueMat : arrowRedMat
+        );
+
+        const arrowX = Math.cos(angleCenter) * arrowRadius;
+        const arrowZ = Math.sin(angleCenter) * arrowRadius;
+        arrowMesh.position.set(arrowX, 0.1, arrowZ);
+        arrowMesh.rotation.y = -angleCenter + (isIncrease ? Math.PI / 2 : -Math.PI / 2);
+        markersGroup.add(arrowMesh);
+
+        // 4. Country Label Placement (CSS2D)
+        const labelRadius = CHART_OUTER_RADIUS + 1.25;
+        const labelX = Math.cos(angleCenter) * labelRadius;
+        const labelZ = Math.sin(angleCenter) * labelRadius;
+
+        const countryDiv = document.createElement('div');
+        countryDiv.className = 'country-label';
+        countryDiv.textContent = data.country;
+        
+        // Hovering label highlights matching bar
+        countryDiv.addEventListener('mouseenter', () => highlightBar(barMesh));
+        countryDiv.addEventListener('mouseleave', () => unhighlightBar());
+
+        const labelObj = new THREE.CSS2DObject(countryDiv);
+        labelObj.position.set(labelX, 0.1, labelZ);
+        labelsGroup.add(labelObj);
+      });
+    }
+
+    function buildGroundGrid() {
+      // Circular Shadow Receiver Platform
+      const planeGeo = new THREE.CircleGeometry(CHART_OUTER_RADIUS + 4, 64);
+      const planeMat = new THREE.ShadowMaterial({ opacity: 0.06 });
+      const plane = new THREE.Mesh(planeGeo, planeMat);
+      plane.rotation.x = -Math.PI / 2;
+      plane.position.y = -0.01;
+      plane.receiveShadow = true;
+      scene.add(plane);
+
+      // Subtle Outer Circle Rim
+      const rimGeo = new THREE.RingGeometry(CHART_OUTER_RADIUS + 0.1, CHART_OUTER_RADIUS + 0.15, 128);
+      const rimMat = new THREE.MeshBasicMaterial({ color: 0xe2e8f0, side: THREE.DoubleSide });
+      const rim = new THREE.Mesh(rimGeo, rimMat);
+      rim.rotation.x = -Math.PI / 2;
+      scene.add(rim);
+    }
+
+    function onMouseMove(event) {
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      // Tooltip position following mouse smoothly
+      const tooltip = document.getElementById('tooltip');
+      tooltip.style.left = `${event.clientX + 16}px`;
+      tooltip.style.top = `${event.clientY + 16}px`;
+
+      // Perform Raycasting
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(interactiveMeshes);
+
+      if (intersects.length > 0) {
+        const mesh = intersects[0].object;
+        if (hoveredMesh !== mesh) {
+          highlightBar(mesh);
+        }
+      } else {
+        if (hoveredMesh && !isHoveringLabel) {
+          unhighlightBar();
+        }
+      }
+    }
+
+    let isHoveringLabel = false;
+
+    function highlightBar(mesh) {
+      unhighlightBar();
+      hoveredMesh = mesh;
+
+      // Scale up slightly and change color
+      new TWEEN.Tween(mesh.scale)
+        .to({ y: 1.4 }, 200)
+        .easing(TWEEN.Easing.Cubic.Out)
+        .start();
+
+      mesh.material.color.setHex(0x1d4ed8); // Darker blue highlight
+
+      // Update Tooltip Contents
+      const data = mesh.userData.data;
+      const delta = (data.score2025 - data.score2013).toFixed(1);
+      const isPositive = delta >= 0;
+
+      document.getElementById('tooltip-country').children[0].textContent = data.country;
+      const deltaBadge = document.getElementById('tooltip-delta-badge');
+      deltaBadge.textContent = (isPositive ? '+' : '') + delta;
+      deltaBadge.className = `text-[10px] px-1.5 py-0.5 rounded font-bold ${isPositive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`;
+
+      document.getElementById('tooltip-2025').textContent = data.score2025.toFixed(1);
+      document.getElementById('tooltip-2013').textContent = data.score2013.toFixed(1);
+      
+      const statusElem = document.getElementById('tooltip-status');
+      statusElem.textContent = isPositive ? 'Increased' : 'Fell';
+      statusElem.className = `font-semibold ${isPositive ? 'text-blue-600' : 'text-red-500'}`;
+
+      const tooltip = document.getElementById('tooltip');
+      tooltip.classList.remove('opacity-0', 'translate-y-2');
+      tooltip.classList.add('opacity-100', 'translate-y-0');
+      document.body.style.cursor = 'pointer';
+    }
+
+    function unhighlightBar() {
+      if (hoveredMesh) {
+        new TWEEN.Tween(hoveredMesh.scale)
+          .to({ y: 1.0 }, 200)
+          .easing(TWEEN.Easing.Cubic.Out)
+          .start();
+
+        hoveredMesh.material.color.setHex(0x2563eb);
+        hoveredMesh = null;
+
+        const tooltip = document.getElementById('tooltip');
+        tooltip.classList.remove('opacity-100', 'translate-y-0');
+        tooltip.classList.add('opacity-0', 'translate-y-2');
+        document.body.style.cursor = 'default';
+      }
+    }
+
+    function animateEntrance() {
+      barGroup.children.forEach((bar, i) => {
+        bar.scale.set(0.01, 1, 0.01);
+        new TWEEN.Tween(bar.scale)
+          .to({ x: 1, z: 1 }, 1200)
+          .delay(i * 30)
+          .easing(TWEEN.Easing.Back.Out)
+          .start();
+      });
+    }
+
+    function resetCamera() {
+      new TWEEN.Tween(camera.position)
+        .to({ x: 0, y: 22, z: 24 }, 1000)
+        .easing(TWEEN.Easing.Cubic.Out)
+        .start();
+
+      new TWEEN.Tween(controls.target)
+        .to({ x: 0, y: 0, z: 0 }, 1000)
+        .easing(TWEEN.Easing.Cubic.Out)
+        .start();
+    }
+
+    function toggleAutoRotate() {
+      isAutoRotating = !isAutoRotating;
+      controls.autoRotate = isAutoRotating;
+      controls.autoRotateSpeed = 1.5;
+      const btn = document.getElementById('btn-rotate');
+      btn.classList.toggle('bg-blue-50');
+      btn.classList.toggle('text-blue-600');
+    }
+
+    function toggle3DHeight() {
+      use3dHeight = !use3dHeight;
+      barGroup.children.forEach((bar) => {
+        const targetHeight = use3dHeight ? 0.5 : 0.05;
+        new TWEEN.Tween(bar.scale)
+          .to({ y: targetHeight / 0.5 }, 500)
+          .easing(TWEEN.Easing.Cubic.Out)
+          .start();
+      });
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      labelRenderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate(time) {
+      requestAnimationFrame(animate);
+      TWEEN.update();
+      controls.update();
+
+      // Render Three.js WebGL & CSS2D Scenes
+      renderer.render(scene, camera);
+      labelRenderer.render(scene, camera);
+    }
+
+    // Initialize application on load
+    window.onload = function() {
+      init();
+    };
+  </script>
+</body>
+</html>
