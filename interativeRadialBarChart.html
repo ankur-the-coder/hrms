@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Radial Bar Charts - 2D / 3D Highcharts Collection</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- TWEEN.js for smooth camera animations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #ffffff;
+            user-select: none;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            background-color: #ffffff;
+        }
+
+        /* Highcharts crisp tooltip styling */
+        .custom-tooltip {
+            position: absolute;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            transform: translate(-50%, -120%);
+            z-index: 50;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(8px);
+            color: #ffffff;
+            padding: 10px 14px;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            font-size: 13px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .custom-tooltip::after {
+            content: '';
+            position: absolute;
+            bottom: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 6px 6px 0 6px;
+            border-style: solid;
+            border-color: rgba(15, 23, 42, 0.95) transparent transparent transparent;
+        }
+
+        .toggle-btn {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .axis-label {
+            position: absolute;
+            color: #475569;
+            font-size: 11px;
+            font-weight: 600;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.3s ease;
+            z-index: 10;
+        }
+
+        .chart-badge {
+            position: absolute;
+            background: #ffffff;
+            color: #0f172a;
+            border: 1.5px solid #0f172a;
+            font-size: 10px;
+            font-weight: 800;
+            padding: 1px 4px;
+            border-radius: 4px;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.3s ease;
+            z-index: 12;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .country-label {
+            position: absolute;
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 700;
+            pointer-events: none;
+            text-align: right;
+            transform: translate(-100%, -50%);
+            transition: opacity 0.3s ease;
+            z-index: 10;
+        }
+
+        .slide-start-label {
+            position: absolute;
+            font-size: 13px;
+            font-weight: 700;
+            pointer-events: none;
+            transform: translate(12px, -50%);
+            transition: opacity 0.3s ease;
+            z-index: 10;
+            white-space: nowrap;
+        }
+
+        .slide-end-badge {
+            position: absolute;
+            color: #0f172a;
+            font-size: 13px;
+            font-weight: 800;
+            pointer-events: none;
+            transform: translate(12px, -50%);
+            transition: opacity 0.3s ease;
+            z-index: 12;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body class="bg-white text-slate-800 antialiased overflow-hidden">
+
+    <header class="absolute top-0 left-0 right-0 z-20 p-4 md:p-6 flex flex-col md:flex-row justify-between items-center pointer-events-none gap-4">
+        <div class="pointer-events-auto text-center md:text-left">
+            <h1 id="chart-title" class="text-lg md:text-2xl font-extrabold tracking-tight text-slate-900">
+                Winter Olympic medals per existing country (TOP 5)
+            </h1>
+            <p id="chart-subtitle" class="text-xs md:text-sm text-slate-500 font-medium mt-0.5">Source: Wikipedia</p>
+        </div>
+
+        <div class="pointer-events-auto flex flex-wrap justify-center items-center gap-3">
+            <!-- Mode Switcher Dropdown -->
+            <div class="relative bg-slate-100 rounded-xl p-1 border border-slate-200 shadow-sm flex items-center">
+                <label for="chart-preset-select" class="text-xs font-bold text-slate-500 pl-3 pr-2 hidden sm:inline">Chart Preset:</label>
+                <select id="chart-preset-select" class="bg-white text-slate-900 text-xs font-bold py-2 px-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400 shadow-sm cursor-pointer">
+                    <option value="olympic">Winter Olympic Medals (TOP 5)</option>
+                    <option value="slide_template">Slide Template (Percentage Radial)</option>
+                    <option value="updating_points">Updating Points with Color Axis</option>
+                </select>
+            </div>
+
+            <!-- 2D / 3D Mode Toggle Controls -->
+            <div class="bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-sm flex items-center space-x-1">
+                <button id="btn-2d" class="toggle-btn px-3.5 py-2 text-xs font-bold rounded-lg bg-white text-slate-900 shadow-sm transition-all">
+                    2D View
+                </button>
+                <button id="btn-3d" class="toggle-btn px-3.5 py-2 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-all">
+                    3D View
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- DOM Labels Overlay Container -->
+    <div id="labels-container" class="absolute inset-0 pointer-events-none z-10 overflow-hidden"></div>
+
+    <!-- Hover Tooltip -->
+    <div id="tooltip" class="custom-tooltip">
+        <div id="tooltip-title" class="font-bold text-slate-100 mb-1 border-b border-slate-700/80 pb-1 text-xs uppercase tracking-wider">Norway</div>
+        <div class="flex items-center space-x-2 text-sm">
+            <span id="tooltip-dot" class="w-3 h-3 rounded-full inline-block shadow-sm"></span>
+            <span id="tooltip-label" class="text-slate-300 font-medium">Gold medals:</span>
+            <span id="tooltip-value" class="font-bold text-white text-base">148</span>
+        </div>
+    </div>
+
+    <footer id="footer-container" class="absolute bottom-5 left-0 right-0 z-20 flex justify-center items-center pointer-events-auto px-4">
+        <!-- Dynamic content injected here based on chart preset -->
+    </footer>
+
+    <script>
+        const PRESETS = {
+            olympic: {
+                title: "Winter Olympic medals per existing country (TOP 5)",
+                subtitle: "Source: Wikipedia",
+                type: "olympic",
+                data: [
+                    { country: 'Norway', gold: 148, silver: 133, bronze: 124 },
+                    { country: 'United States', gold: 114, silver: 121, bronze: 95 },
+                    { country: 'Germany', gold: 104, silver: 98, bronze: 65 },
+                    { country: 'Austria', gold: 71, silver: 88, bronze: 91 },
+                    { country: 'Canada', gold: 77, silver: 72, bronze: 76 }
+                ],
+                colors: { gold: '#f5cc00', silver: '#b5b8bd', bronze: '#d97d38' },
+                maxVal: 425
+            },
+            slide_template: {
+                title: "Radial Bar Chart – Slide Template",
+                subtitle: "Custom racetrack percentage arcs",
+                type: "slide_template",
+                data: [
+                    { label: "Lorem Ipsum", value: "90%", percent: 0.90, color: "#9bbd5c", radius: 3.2 },
+                    { label: "Lorem Ipsum", value: "60%", percent: 0.60, color: "#c8381e", radius: 2.6 },
+                    { label: "Lorem Ipsum", value: "20%", percent: 0.20, color: "#41b6e6", radius: 2.0 },
+                    { label: "Lorem Ipsum", value: "50%", percent: 0.50, color: "#f08c28", radius: 1.4 },
+                    { label: "Lorem Ipsum", value: "30%", percent: 0.30, color: "#385272", radius: 0.8 }
+                ]
+            },
+            updating_points: {
+                title: "Updating points with color axis",
+                subtitle: "Polar radial visualization with continuous color gradient",
+                type: "updating_points",
+                data: [
+                    { ring: 0, val1: 1.8, val2: 1.2 },
+                    { ring: 1, val1: 3.2, val2: 0.8 },
+                    { ring: 2, val1: 4.5, val2: 0.0 },
+                    { ring: 3, val1: 5.8, val2: 0.0 },
+                    { ring: 4, val1: 6.2, val2: 0.0 },
+                    { ring: 5, val1: 7.0, val2: 0.0 },
+                    { ring: 6, val1: 5.5, val2: 1.5 },
+                    { ring: 7, val1: 4.8, val2: 2.1 },
+                    { ring: 8, val1: 1.1, val2: 0.9 },
+                    { ring: 9, val1: 0.6, val2: 0.4 }
+                ],
+                colors: ['#a7f3d0', '#34d399', '#38bdf8', '#0284c7']
+            }
+        };
+
+        class RacetrackCurve extends THREE.Curve {
+            constructor(radius, lBottom, lTop, centerX = -1.2, centerY = 0) {
+                super();
+                this.radius = radius;
+                this.lBottom = lBottom;
+                this.lTop = lTop;
+                this.centerX = centerX;
+                this.centerY = centerY;
+                this.totLen = lBottom + Math.PI * radius + lTop;
+            }
+
+            getPoint(t) {
+                const s = t * this.totLen;
+                let x, y;
+
+                if (s <= this.lBottom) {
+                    x = this.lBottom - s;
+                    y = -this.radius;
+                } else if (s <= this.lBottom + Math.PI * this.radius) {
+                    const sArc = s - this.lBottom;
+                    const angle = -Math.PI / 2 - sArc / this.radius;
+                    x = this.radius * Math.cos(angle);
+                    y = this.radius * Math.sin(angle);
+                } else {
+                    const sTop = s - (this.lBottom + Math.PI * this.radius);
+                    x = sTop;
+                    y = this.radius;
+                }
+
+                return new THREE.Vector3(x + this.centerX, y + this.centerY, 0);
+            }
+        }
+
+        let activePresetKey = 'olympic';
+        let currentMode = '2D';
+        let scene, camera, renderer, controls;
+        let interactiveObjects = [];
+        let raycaster, mouse;
+        let hoveredObject = null;
+
+        // Camera positions optimized to prevent clipping/spill
+        const cameraPos2D = { x: 0, y: -0.4, z: 15.0 };
+        const cameraPos3D = { x: 3.5, y: -7.5, z: 12.5 };
+        const target3D = { x: -0.2, y: 0.5, z: 0 };
+        const target2D = { x: 0, y: -0.4, z: 0 };
+
+        function initScene() {
+            const container = document.getElementById('canvas-container');
+
+            // 1. Scene with pure white background
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xffffff);
+
+            // 2. Camera setup
+            camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(cameraPos2D.x, cameraPos2D.y, cameraPos2D.z);
+            camera.up.set(0, 1, 0);
+
+            adjustCameraFOV();
+
+            // 3. WebGL Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // 4. OrbitControls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.enableRotate = false; // Off in 2D
+            controls.enableZoom = true;
+            controls.maxDistance = 28;
+            controls.minDistance = 6;
+            controls.target.set(target2D.x, target2D.y, target2D.z);
+
+            // 5. Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.95);
+            scene.add(ambientLight);
+
+            const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.55);
+            dirLight1.position.set(10, 15, 20);
+            dirLight1.castShadow = true;
+            scene.add(dirLight1);
+
+            const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.35);
+            dirLight2.position.set(-10, -10, -10);
+            scene.add(dirLight2);
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2(-1000, -1000);
+
+            // Build current preset
+            rebuildCurrentChart();
+
+            // Event Listeners
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('mousemove', onMouseMove);
+            
+            document.getElementById('btn-2d').addEventListener('click', () => setViewMode('2D'));
+            document.getElementById('btn-3d').addEventListener('click', () => setViewMode('3D'));
+
+            document.getElementById('chart-preset-select').addEventListener('change', (e) => {
+                activePresetKey = e.target.value;
+                rebuildCurrentChart();
+            });
+
+            animate();
+        }
+
+        function adjustCameraFOV() {
+            const aspect = window.innerWidth / window.innerHeight;
+            if (aspect < 1) {
+                camera.fov = 42 / aspect;
+            } else {
+                camera.fov = 42;
+            }
+            camera.updateProjectionMatrix();
+        }
+
+        function createArcTubeMesh(radius, startAngle, endAngle, tubeRadius, colorHex, segmentData, centerX = 0) {
+            const arcGroup = new THREE.Group();
+
+            class ArcCurve extends THREE.Curve {
+                constructor(r, sAngle, eAngle, cx) {
+                    super();
+                    this.r = r;
+                    this.sAngle = sAngle;
+                    this.eAngle = eAngle;
+                    this.cx = cx;
+                }
+                getPoint(t) {
+                    const angle = this.sAngle + t * (this.eAngle - this.sAngle);
+                    const x = this.cx + this.r * Math.cos(angle);
+                    const y = this.r * Math.sin(angle);
+                    return new THREE.Vector3(x, y, 0);
+                }
+            }
+
+            const curve = new ArcCurve(radius, startAngle, endAngle, centerX);
+            const tubularSegments = Math.max(12, Math.floor(Math.abs(endAngle - startAngle) * 32));
+            const tubeGeometry = new THREE.TubeGeometry(curve, tubularSegments, tubeRadius, 24, false);
+
+            const material = new THREE.MeshStandardMaterial({
+                color: new THREE.Color(colorHex),
+                roughness: 0.35,
+                metalness: 0.1,
+                transparent: true,
+                opacity: 1.0
+            });
+
+            const mainTube = new THREE.Mesh(tubeGeometry, material);
+            mainTube.castShadow = true;
+            mainTube.receiveShadow = true;
+            arcGroup.add(mainTube);
+
+            // Hemispherical caps for rounded arc endpoints
+            const sphereCapGeo = new THREE.SphereGeometry(tubeRadius, 24, 24);
+            
+            const startCap = new THREE.Mesh(sphereCapGeo, material);
+            startCap.position.copy(curve.getPoint(0));
+            startCap.castShadow = true;
+            arcGroup.add(startCap);
+
+            const endCap = new THREE.Mesh(sphereCapGeo, material);
+            endCap.position.copy(curve.getPoint(1));
+            endCap.castShadow = true;
+            arcGroup.add(endCap);
+
+            arcGroup.traverse((child) => {
+                if (child.isMesh) {
+                    child.userData = {
+                        ...segmentData,
+                        parentGroup: arcGroup,
+                        baseColor: colorHex
+                    };
+                    interactiveObjects.push(child);
+                }
+            });
+
+            return arcGroup;
+        }
+
+        function rebuildCurrentChart() {
+            // 1. Clear previous scene meshes
+            const existing = scene.getObjectByName('chartGroup');
+            if (existing) scene.remove(existing);
+
+            interactiveObjects = [];
+            hoveredObject = null;
+            document.getElementById('labels-container').innerHTML = '';
+
+            const preset = PRESETS[activePresetKey];
+            document.getElementById('chart-title').textContent = preset.title;
+            document.getElementById('chart-subtitle').textContent = preset.subtitle;
+
+            const chartGroup = new THREE.Group();
+            chartGroup.name = 'chartGroup';
+
+            if (preset.type === 'olympic') {
+                buildOlympicChart(chartGroup, preset);
+            } else if (preset.type === 'slide_template') {
+                buildSlideTemplateChart(chartGroup, preset);
+            } else if (preset.type === 'updating_points') {
+                buildUpdatingPointsChart(chartGroup, preset);
+            }
+
+            scene.add(chartGroup);
+            buildFooterLegend(preset);
+        }
+
+        function buildSlideTemplateChart(chartGroup, preset) {
+            const tubeRadius = 0.20;
+            const maxTopLen = 4.5;
+            const lBottom = 1.6;
+            const centerX = -1.2;
+
+            preset.data.forEach((item, index) => {
+                const lTop = item.percent * maxTopLen;
+                const curve = new RacetrackCurve(item.radius, lBottom, lTop, centerX, 0);
+
+                const tubularSegments = 96;
+                const tubeGeometry = new THREE.TubeGeometry(curve, tubularSegments, tubeRadius, 24, false);
+
+                const material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(item.color),
+                    roughness: 0.35,
+                    metalness: 0.1,
+                    transparent: true,
+                    opacity: 1.0
+                });
+
+                const trackGroup = new THREE.Group();
+
+                const mainTube = new THREE.Mesh(tubeGeometry, material);
+                mainTube.castShadow = true;
+                mainTube.receiveShadow = true;
+                trackGroup.add(mainTube);
+
+                // End caps
+                const capGeo = new THREE.SphereGeometry(tubeRadius, 24, 24);
+
+                const startCap = new THREE.Mesh(capGeo, material);
+                startCap.position.copy(curve.getPoint(0));
+                startCap.castShadow = true;
+                trackGroup.add(startCap);
+
+                const endCap = new THREE.Mesh(capGeo, material);
+                endCap.position.copy(curve.getPoint(1));
+                endCap.castShadow = true;
+                trackGroup.add(endCap);
+
+                const segmentData = {
+                    title: `Track ${index + 1}`,
+                    label: "Completion Rate:",
+                    value: item.value,
+                    color: item.color,
+                    typeKey: `item_${index}`
+                };
+
+                trackGroup.traverse((child) => {
+                    if (child.isMesh) {
+                        child.userData = {
+                            ...segmentData,
+                            parentGroup: trackGroup,
+                            baseColor: item.color
+                        };
+                        interactiveObjects.push(child);
+                    }
+                });
+
+                chartGroup.add(trackGroup);
+
+                // Start label (Lorem Ipsum at bottom start)
+                const startPt = curve.getPoint(0);
+                createDOMElement('slide-start-label', item.label, {
+                    type: 'slide_start',
+                    x: startPt.x,
+                    y: startPt.y,
+                    color: item.color
+                });
+
+                // End percentage badge (90%, 60%, etc. at top end)
+                const endPt = curve.getPoint(1);
+                createDOMElement('slide-end-badge', item.value, {
+                    type: 'slide_end',
+                    x: endPt.x,
+                    y: endPt.y
+                });
+            });
+        }
+
+        function buildOlympicChart(chartGroup, preset) {
+            const innerRadius = 1.7;
+            const radiusStep = 0.8;
+            const tubeRadius = 0.28;
+            const startAngleOffset = Math.PI / 2;
+            const maxSweepAngle = Math.PI * 1.85;
+
+            preset.data.forEach((countryData, index) => {
+                const currentRadius = innerRadius + (preset.data.length - 1 - index) * radiusStep;
+                let currentAngle = startAngleOffset;
+
+                ['gold', 'silver', 'bronze'].forEach(type => {
+                    const count = countryData[type];
+                    const sweepAngle = -(count / preset.maxVal) * maxSweepAngle;
+                    const nextAngle = currentAngle + sweepAngle;
+
+                    const segmentData = {
+                        title: countryData.country,
+                        label: `${type.charAt(0).toUpperCase() + type.slice(1)} medals:`,
+                        value: count,
+                        color: preset.colors[type],
+                        typeKey: type
+                    };
+
+                    const arcSegment = createArcTubeMesh(
+                        currentRadius, currentAngle, nextAngle, tubeRadius, preset.colors[type], segmentData
+                    );
+
+                    chartGroup.add(arcSegment);
+                    currentAngle = nextAngle;
+                });
+
+                // Country Label
+                createDOMElement('country-label', countryData.country, { radius: currentRadius, type: 'country' });
+            });
+
+            // Axis labels (0 to 400)
+            const outerRadius = innerRadius + (preset.data.length - 1) * radiusStep + 0.55;
+            const ticks = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400];
+            ticks.forEach(val => {
+                const sweepAngle = -(val / preset.maxVal) * maxSweepAngle;
+                const angle = startAngleOffset + sweepAngle;
+                createDOMElement('axis-label', val, { angle, radius: outerRadius, type: 'axis' });
+            });
+        }
+
+        function buildStackedPolarChart(chartGroup, preset) {
+            const innerRadius = 0.8;
+            const radiusStep = 0.45;
+            const tubeRadius = 0.18;
+            const startAngleOffset = Math.PI / 2;
+            const maxVal = 42;
+            const maxSweepAngle = Math.PI * 1.85;
+
+            preset.series1.forEach((val1, index) => {
+                const currentRadius = innerRadius + (preset.series1.length - 1 - index) * radiusStep;
+                const val2 = preset.series2[index];
+
+                let currentAngle = startAngleOffset;
+
+                // Series 1 (Green)
+                const sweep1 = -(val1 / maxVal) * maxSweepAngle;
+                const angle1 = currentAngle + sweep1;
+                const seg1 = createArcTubeMesh(
+                    currentRadius, currentAngle, angle1, tubeRadius, preset.colors.green,
+                    { title: `Track ${index}`, label: `Series 1:`, value: val1, color: preset.colors.green, typeKey: 'green' }
+                );
+                chartGroup.add(seg1);
+
+                // Series 2 (Cyan - Stacked)
+                currentAngle = angle1;
+                const sweep2 = -(val2 / maxVal) * maxSweepAngle;
+                const angle2 = currentAngle + sweep2;
+                const seg2 = createArcTubeMesh(
+                    currentRadius, currentAngle, angle2, tubeRadius, preset.colors.cyan,
+                    { title: `Track ${index}`, label: `Series 2:`, value: val2, color: preset.colors.cyan, typeKey: 'cyan' }
+                );
+                chartGroup.add(seg2);
+
+                // Internal ring index badge
+                createDOMElement('axis-label', index, { angle: startAngleOffset, radius: currentRadius, type: 'ring_index' });
+
+                // Internal value badges on series transitions
+                createDOMElement('chart-badge', val1, { angle: angle1, radius: currentRadius, type: 'badge' });
+                if (val2 > 0) {
+                    createDOMElement('chart-badge', val1 + val2, { angle: angle2, radius: currentRadius, type: 'badge' });
+                }
+            });
+
+            // Outer ring ticks (0..42)
+            const outerRadius = innerRadius + (preset.series1.length - 1) * radiusStep + 0.45;
+            for (let tick = 0; tick <= 42; tick += 2) {
+                const sweepAngle = -(tick / maxVal) * maxSweepAngle;
+                const angle = startAngleOffset + sweepAngle;
+                createDOMElement('axis-label', tick, { angle, radius: outerRadius, type: 'axis' });
+            }
+        }
+
+        function buildDualThresholdChart(chartGroup, preset) {
+            const innerRadius = 0.5;
+            const radiusStep = 0.38;
+            const tubeRadius = 0.16;
+            const maxVal = 10;
+            const startAngleOffset = Math.PI / 2;
+            const maxSweep = Math.PI * 1.5;
+
+            // Left Pane (Series 1 - Cyan) at X = -3.2
+            preset.leftData.forEach((val, index) => {
+                const r = innerRadius + (preset.leftData.length - 1 - index) * radiusStep;
+                const sweep = -(val / maxVal) * maxSweep;
+                const seg = createArcTubeMesh(
+                    r, startAngleOffset, startAngleOffset + sweep, tubeRadius, preset.colors.left,
+                    { title: `Left Ring ${index}`, label: `Series 1:`, value: val, color: preset.colors.left, typeKey: 'left' },
+                    -3.2
+                );
+                chartGroup.add(seg);
+            });
+
+            // Right Pane (Series 2 - Green) at X = 3.2
+            preset.rightData.forEach((val, index) => {
+                const r = innerRadius + (preset.rightData.length - 1 - index) * radiusStep;
+                const sweep = -(val / maxVal) * maxSweep;
+                const seg = createArcTubeMesh(
+                    r, startAngleOffset, startAngleOffset + sweep, tubeRadius, preset.colors.right,
+                    { title: `Right Ring ${index}`, label: `Series 2:`, value: val, color: preset.colors.right, typeKey: 'right' },
+                    3.2
+                );
+                chartGroup.add(seg);
+            });
+
+            // Dual Grid Ticks
+            const outerR = innerRadius + (preset.leftData.length - 1) * radiusStep + 0.4;
+            [-10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9].forEach((t, i) => {
+                const angle = startAngleOffset - (i / 20) * Math.PI * 2;
+                createDOMElement('axis-label', t, { angle, radius: outerR, type: 'dual_axis', cx: -3.2 });
+                createDOMElement('axis-label', t, { angle, radius: outerR, type: 'dual_axis', cx: 3.2 });
+            });
+        }
+
+        function buildCustomAnglesChart(chartGroup, preset) {
+            const innerRadius = 0.8;
+            const radiusStep = 0.38;
+            const tubeRadius = 0.16;
+
+            // Start angle 45 deg, End angle 315 deg (270 degree span = 1.5 * PI)
+            const startAngleRad = Math.PI / 4; // 45°
+            const endAngleRad = Math.PI * 1.75; // 315°
+            const totalSpan = endAngleRad - startAngleRad;
+            const maxVal = 250;
+
+            preset.data.forEach((item, index) => {
+                const r = innerRadius + (preset.data.length - 1 - index) * radiusStep;
+                const sweep = (item.val / maxVal) * totalSpan;
+                const endA = startAngleRad + sweep;
+
+                const seg = createArcTubeMesh(
+                    r, startAngleRad, endA, tubeRadius, item.color,
+                    { title: `Track ${index}`, label: `Value:`, value: item.val, color: item.color, typeKey: `angle_${index}` }
+                );
+                chartGroup.add(seg);
+
+                // Badge at arc end
+                createDOMElement('chart-badge', item.badge, { angle: endA, radius: r, type: 'badge' });
+            });
+
+            // Grid Ticks around 45° - 315° span
+            const outerR = innerRadius + (preset.data.length - 1) * radiusStep + 0.45;
+            for (let tick = 0; tick <= 220; tick += 20) {
+                const angle = startAngleRad + (tick / 250) * totalSpan;
+                createDOMElement('axis-label', tick, { angle, radius: outerR, type: 'axis' });
+            }
+        }
+
+        function buildUpdatingPointsChart(chartGroup, preset) {
+            const innerRadius = 0.6;
+            const radiusStep = 0.42;
+            const tubeRadius = 0.18;
+            const startAngle = Math.PI / 2;
+            const maxVal = 8.0;
+            const maxSweep = Math.PI * 1.85;
+
+            preset.data.forEach((item, index) => {
+                const r = innerRadius + (preset.data.length - 1 - index) * radiusStep;
+                const sweep1 = -(item.val1 / maxVal) * maxSweep;
+                const endA1 = startAngle + sweep1;
+
+                // Pick color gradient based on value
+                const colorHex = preset.colors[Math.min(preset.colors.length - 1, Math.floor((item.val1 / maxVal) * preset.colors.length))];
+
+                const seg1 = createArcTubeMesh(
+                    r, startAngle, endA1, tubeRadius, colorHex,
+                    { title: `Point ${index}`, label: `Primary Value:`, value: item.val1, color: colorHex, typeKey: 'grad' }
+                );
+                chartGroup.add(seg1);
+
+                if (item.val2 > 0) {
+                    const sweep2 = -(item.val2 / maxVal) * maxSweep;
+                    const endA2 = endA1 + sweep2;
+                    const seg2 = createArcTubeMesh(
+                        r, endA1, endA2, tubeRadius, preset.colors[0],
+                        { title: `Point ${index}`, label: `Secondary Value:`, value: item.val2, color: preset.colors[0], typeKey: 'grad' }
+                    );
+                    chartGroup.add(seg2);
+                }
+
+                createDOMElement('axis-label', item.ring, { angle: startAngle, radius: r, type: 'ring_index' });
+            });
+
+            const outerR = innerRadius + (preset.data.length - 1) * radiusStep + 0.45;
+            for (let t = 0; t <= 9; t++) {
+                const angle = startAngle - (t / 10) * maxSweep;
+                createDOMElement('axis-label', t, { angle, radius: outerR, type: 'axis' });
+            }
+        }
+
+        function createDOMElement(className, text, dataset) {
+            const container = document.getElementById('labels-container');
+            const el = document.createElement('div');
+            el.className = className;
+            el.textContent = text;
+            Object.keys(dataset).forEach(k => el.dataset[k] = dataset[k]);
+            container.appendChild(el);
+        }
+
+        function updateLabelsPosition() {
+            const labels = document.querySelectorAll('#labels-container > div');
+            const tempV = new THREE.Vector3();
+
+            labels.forEach(label => {
+                const cx = label.dataset.cx ? parseFloat(label.dataset.cx) : 0;
+
+                if (label.dataset.type === 'country') {
+                    const r = parseFloat(label.dataset.radius);
+                    tempV.set(-0.2 + cx, r, 0);
+                } else if (label.dataset.type === 'ring_index') {
+                    const r = parseFloat(label.dataset.radius);
+                    tempV.set(-0.15 + cx, r, 0);
+                } else if (label.dataset.type === 'slide_start' || label.dataset.type === 'slide_end') {
+                    const px = parseFloat(label.dataset.x);
+                    const py = parseFloat(label.dataset.y);
+                    tempV.set(px, py, 0);
+                    if (label.dataset.color) {
+                        label.style.color = label.dataset.color;
+                    }
+                } else {
+                    const angle = parseFloat(label.dataset.angle);
+                    const r = parseFloat(label.dataset.radius);
+                    tempV.set(cx + r * Math.cos(angle), r * Math.sin(angle), 0);
+                }
+
+                tempV.project(camera);
+
+                const x = (tempV.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-(tempV.y * 0.5) + 0.5) * window.innerHeight;
+
+                label.style.left = `${x}px`;
+                label.style.top = `${y}px`;
+
+                label.style.opacity = (tempV.z > 1 || x < 0 || x > window.innerWidth || y < 0 || y > window.innerHeight) ? '0' : '1';
+            });
+        }
+
+        function buildFooterLegend(preset) {
+            const footer = document.getElementById('footer-container');
+            footer.innerHTML = '';
+
+            if (preset.type === 'olympic') {
+                footer.innerHTML = `
+                    <div class="bg-white/95 backdrop-blur-md px-6 py-2.5 rounded-full border border-slate-200 shadow-lg flex items-center space-x-6 text-xs font-bold text-slate-700">
+                        <div class="legend-item flex items-center space-x-2 cursor-pointer hover:opacity-75 transition-opacity" data-key="gold">
+                            <span class="w-3.5 h-3.5 rounded-full bg-[#f5cc00] border border-yellow-500/30"></span>
+                            <span>Gold medals</span>
+                        </div>
+                        <div class="legend-item flex items-center space-x-2 cursor-pointer hover:opacity-75 transition-opacity" data-key="silver">
+                            <span class="w-3.5 h-3.5 rounded-full bg-[#b5b8bd] border border-slate-400/30"></span>
+                            <span>Silver medals</span>
+                        </div>
+                        <div class="legend-item flex items-center space-x-2 cursor-pointer hover:opacity-75 transition-opacity" data-key="bronze">
+                            <span class="w-3.5 h-3.5 rounded-full bg-[#d97d38] border border-orange-700/30"></span>
+                            <span>Bronze medals</span>
+                        </div>
+                    </div>
+                `;
+            } else if (preset.type === 'slide_template') {
+                footer.innerHTML = `
+                    <div class="bg-white/95 backdrop-blur-md p-5 rounded-2xl border border-slate-200 shadow-xl max-w-md text-xs text-slate-600">
+                        <h3 class="font-extrabold text-slate-900 text-sm mb-1">Lorem Ipsum</h3>
+                        <p class="leading-relaxed mb-3 text-[11px] text-slate-500">
+                            Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+                        </p>
+                        <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                            ${preset.data.map((item, idx) => `
+                                <div class="legend-item flex items-center space-x-2 cursor-pointer hover:opacity-75 transition-opacity" data-key="item_${idx}">
+                                    <span class="w-3 h-3 rounded-full flex-shrink-0" style="background-color: ${item.color}"></span>
+                                    <span class="font-bold text-slate-700 text-[11px]">${item.label} (${item.value})</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            } else if (preset.type === 'updating_points') {
+                footer.innerHTML = `
+                    <div class="bg-white/95 backdrop-blur-md px-6 py-3 rounded-2xl border border-slate-200 shadow-lg flex flex-col items-center space-y-1 text-xs font-bold text-slate-700">
+                        <div class="w-48 h-3 rounded-md shadow-inner" style="background: linear-gradient(to right, ${preset.colors.join(', ')})"></div>
+                        <div class="flex justify-between w-48 text-[10px] text-slate-500 font-extrabold">
+                            <span>0</span><span>2</span><span>4</span><span>6</span><span>8</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Legend interactive dimming handler
+            document.querySelectorAll('.legend-item').forEach(item => {
+                item.addEventListener('mouseenter', () => {
+                    const key = item.dataset.key;
+                    document.body.style.cursor = 'pointer';
+                    interactiveObjects.forEach(mesh => {
+                        const match = mesh.userData.typeKey === key;
+                        mesh.material.opacity = match ? 1.0 : 0.22;
+                    });
+                });
+                item.addEventListener('mouseleave', resetHighlight);
+            });
+        }
+
+        function setViewMode(mode) {
+            if (currentMode === mode) return;
+            currentMode = mode;
+
+            const btn2D = document.getElementById('btn-2d');
+            const btn3D = document.getElementById('btn-3d');
+
+            if (mode === '2D') {
+                btn2D.className = "toggle-btn px-3.5 py-2 text-xs font-bold rounded-lg bg-white text-slate-900 shadow-sm transition-all";
+                btn3D.className = "toggle-btn px-3.5 py-2 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-all";
+                controls.enableRotate = false;
+
+                new TWEEN.Tween(camera.position)
+                    .to(cameraPos2D, 1100)
+                    .easing(TWEEN.Easing.Cubic.Out)
+                    .start();
+
+                new TWEEN.Tween(controls.target)
+                    .to(target2D, 1100)
+                    .easing(TWEEN.Easing.Cubic.Out)
+                    .onUpdate(() => controls.update())
+                    .start();
+
+            } else {
+                btn3D.className = "toggle-btn px-3.5 py-2 text-xs font-bold rounded-lg bg-white text-slate-900 shadow-sm transition-all";
+                btn2D.className = "toggle-btn px-3.5 py-2 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-all";
+                controls.enableRotate = true;
+
+                new TWEEN.Tween(camera.position)
+                    .to(cameraPos3D, 1100)
+                    .easing(TWEEN.Easing.Cubic.Out)
+                    .start();
+
+                new TWEEN.Tween(controls.target)
+                    .to(target3D, 1100)
+                    .easing(TWEEN.Easing.Cubic.Out)
+                    .onUpdate(() => controls.update())
+                    .start();
+            }
+        }
+
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            const tooltip = document.getElementById('tooltip');
+            tooltip.style.left = `${event.clientX}px`;
+            tooltip.style.top = `${event.clientY - 15}px`;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(interactiveObjects);
+
+            if (intersects.length > 0) {
+                const hitMesh = intersects[0].object;
+                if (hoveredObject !== hitMesh) {
+                    hoveredObject = hitMesh;
+                    highlightSegment(hitMesh.userData);
+                    showTooltip(hitMesh.userData);
+                }
+            } else {
+                if (hoveredObject) {
+                    hoveredObject = null;
+                    resetHighlight();
+                    hideTooltip();
+                }
+            }
+        }
+
+        function highlightSegment(activeData) {
+            document.body.style.cursor = 'pointer';
+
+            // Highcharts hover: Active segment stays 1.0 opacity, unhovered segments dim to 0.22
+            interactiveObjects.forEach(mesh => {
+                const isMatch = mesh.userData.parentGroup === activeData.parentGroup;
+                mesh.material.opacity = isMatch ? 1.0 : 0.22;
+            });
+        }
+
+        function resetHighlight() {
+            document.body.style.cursor = 'default';
+            interactiveObjects.forEach(mesh => {
+                mesh.material.opacity = 1.0;
+            });
+        }
+
+        function showTooltip(data) {
+            const tooltip = document.getElementById('tooltip');
+            document.getElementById('tooltip-title').textContent = data.title;
+            document.getElementById('tooltip-label').textContent = data.label;
+            document.getElementById('tooltip-value').textContent = data.value;
+            document.getElementById('tooltip-dot').style.backgroundColor = data.color;
+            tooltip.style.opacity = '1';
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').style.opacity = '0';
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            adjustCameraFOV();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            TWEEN.update();
+            controls.update();
+            updateLabelsPosition();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function() {
+            initScene();
+        };
+    </script>
+</body>
+</html>
