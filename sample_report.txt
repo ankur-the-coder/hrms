@@ -1,0 +1,248 @@
+Analysis made by Claude (Model version: Claude Sonnet 5)
+
+==============================================================
+REPORT: RULES FOR BUILDING A NEUMORPHIC + GLOSSY DATE RANGE PICKER
+==============================================================
+
+Source analysed: neumorphic_glossy_datepicker.html
+Style: soft-UI (neumorphism) calendar with a continuous recessed
+range "trench" and glossy 3D coral start/end badges rendered in WebGL.
+
+
+--------------------------------------------------------------
+1. SUMMARY
+--------------------------------------------------------------
+The picker works because everything is made from ONE background
+colour, lit by ONE imaginary light source (top-left). Depth comes
+only from paired shadows (a dark one and a light one), never from
+borders or different fill colours. The only colour accent is coral,
+and the glossy shine is added by a separate Three.js canvas that
+sits over the DOM.
+
+
+--------------------------------------------------------------
+2. DESIGN RULES (VISUAL)
+--------------------------------------------------------------
+Rule 1. Use a single base colour everywhere.
+  The card, buttons, slots and day cells all share
+  --bg-color: #f0ece6 (warm beige). Neumorphism breaks if
+  surfaces use different fills, because shadows must blend into
+  the surface.
+
+Rule 2. Define exactly two shadow colours and reuse them.
+  --shadow-dark:  #d3ccc3  (bottom-right)
+  --shadow-light: #ffffff  (top-left)
+  Keep the light source consistent: dark shadow always goes down-
+  right, light shadow always goes up-left.
+
+Rule 3. Build three depth states from those two shadows.
+  - Extruded (raised): outer shadows, e.g. buttons
+      5px 5px 10px dark, -5px -5px 10px light
+  - Extruded card (large): 20px 20px 40px dark, -20px -20px 40px light
+  - Pressed (recessed): the same values with "inset", e.g. the
+      header display slot and range trench
+  Store these as CSS variables so all components stay consistent.
+  Larger elements get larger offsets and blur.
+
+Rule 4. Use generous rounding.
+  Card 36px, display slot 20px, buttons 16px or 50% (circles),
+  trench caps 22px (half the 44px cell height). Sharp corners
+  break the soft look.
+
+Rule 5. Keep text low-contrast, light-weight and "carved".
+  - Colour #585047 (warm grey-brown), font-weight 400-500
+  - text-shadow: -1px -1px 1px #c5bcb0, 1px 1px 1px #ffffff
+    (a small dark and light pair makes the text look engraved)
+  Avoid bold text; it fights the soft style.
+
+Rule 6. Use one accent colour, sparingly.
+  Coral #ff6849 is used only for arrows, nav icons, the Clear
+  label and the selected start/end badges. A soft glow
+  (rgba(255,104,73,0.35)) accompanies coral elements.
+
+Rule 7. Give every interactive element a pressed state.
+  On :active, swap the outer shadow for an inset shadow and use
+  transform: scale(0.95-0.96) with a 0.1s transition. Remove the
+  default outline (outline: none), and replace it with a
+  visible focus style if accessibility matters.
+
+
+--------------------------------------------------------------
+3. LAYOUT RULES
+--------------------------------------------------------------
+Rule 8. Structure the card top to bottom:
+  range display slot (Start -> End) / month header with round
+  prev-next buttons / weekday labels / 7-column day grid / footer
+  with a Clear button.
+
+Rule 9. Use CSS Grid with 7 equal columns for weekdays and days.
+  grid-template-columns: repeat(7, 1fr).
+
+Rule 10. Set column-gap to ZERO and use only a row gap (8px).
+  The horizontal gap must be 0 so neighbouring selected cells join
+  into one unbroken trench. The vertical gap keeps rows separate.
+
+Rule 11. Give day cells a fixed height (44px) and centre content
+  with flexbox. Fixed height lets the trench caps use a radius of
+  exactly half the height (22px), producing perfect pill ends.
+
+Rule 12. Pad the start of the month with empty cells.
+  Use new Date(year, month, 1).getDay() to insert blank cells so
+  day 1 lands in the correct weekday column.
+
+
+--------------------------------------------------------------
+4. RANGE "TRENCH" RULES
+--------------------------------------------------------------
+Rule 13. Draw the range as a continuous recessed channel,
+  not as filled circles.
+  Every day in the range (start, end and everything between)
+  gets .in-trench: same background as the card, with an inset
+  shadow only on top and bottom (inset 0 4px 5px dark,
+  inset 0 -4px 5px light). Because column-gap is 0, the
+  cells read as a single groove.
+
+Rule 14. Round only the ends of each visual segment.
+  - Left cap:  rounded left corners, square right corners
+  - Right cap: rounded right corners, square left corners
+  - Single day: rounded on both sides
+  Add an extra inset on the capped side (e.g. inset 4px 4px ...)
+  so the end looks closed.
+
+Rule 15. Treat row edges as caps too.
+  A range that wraps over several weeks must break at the row
+  boundary. Add the left cap when the cell is the start date OR
+  the Sunday column (colIndex 0). Add the right cap when it is the
+  end date OR the Saturday column (colIndex 6). A start date with
+  no end yet (only one date chosen) also gets a right cap.
+
+Rule 16. Compute the column index per cell.
+  colIndex = (firstDayIndex + day - 1) % 7. This drives Rule 15.
+
+Rule 17. Show a live hover preview.
+  While only a start date is chosen, hovering another day sets
+  hoverDate and draws the trench to it. Clear hoverDate on
+  mouseleave of the grid. Normalise the range with min/max so it
+  works whichever direction the user hovers.
+
+
+--------------------------------------------------------------
+5. INTERACTION RULES (LOGIC)
+--------------------------------------------------------------
+Rule 18. Selection state machine:
+  - No start, or both dates set -> the click becomes the new start,
+    end cleared
+  - Start set, no end, click BEFORE start -> the click becomes the
+    new start
+  - Start set, no end, click on or after start -> the click becomes
+    the end
+Rule 19. Compare dates by calendar day (year, month, date) using a
+  helper like isSameDay, not by timestamps, to avoid time-of-day
+  bugs.
+Rule 20. Keep one update function (updateGridState) that resets
+  every cell's classes and re-applies trench/caps/badges from the
+  current state. Call it after every click, hover, clear and
+  month change. Do not hand-edit cells elsewhere.
+Rule 21. Update the top display slot from state: formatted date
+  (e.g. "Sep 24, 2026") when set, or a dimmed placeholder
+  ("Start Date" / "End Date", opacity 0.55) when empty.
+Rule 22. Provide Clear (reset all three dates) and previous /
+  next month buttons that rebuild the grid.
+Rule 23. Stop click propagation on cells and avoid destroying the
+  whole DOM on every hover. Rebuild the grid only on month
+  change; on hover and click only update classes and content.
+
+
+--------------------------------------------------------------
+6. GLOSS LAYER RULES (THREE.JS)
+--------------------------------------------------------------
+Rule 24. Put a transparent WebGL canvas over the card.
+  position: absolute; inset: 0; pointer-events: none;
+  z-index: 1; border-radius: inherit. The card needs
+  position: relative and isolation: isolate. Day cells sit at
+  z-index: 2 so text stays above the canvas.
+
+Rule 25. Make the DOM badge transparent and let WebGL draw it.
+  The .raised-badge keeps its size and text but has
+  background: transparent and box-shadow: none, so the 3D sphere
+  underneath shows through. Keep a small text-shadow so the number
+  stays legible on the gloss.
+
+Rule 26. Create the renderer with alpha: true and
+  setClearColor(0x000000, 0). Cap pixel ratio at 2. Use an
+  OrthographicCamera whose units equal CSS pixels (left 0, right
+  W, top 0, bottom -H) so DOM positions map directly to 3D
+  positions.
+
+Rule 27. Build the badges as flattened spheres.
+  SphereGeometry(18, 48, 32) with mesh.scale.z = 0.6 gives a
+  low dome. Position each mesh at the centre of its DOM badge
+  (from getBoundingClientRect, relative to the card, y inverted).
+
+Rule 28. Use a glossy physical material.
+  MeshPhysicalMaterial: colour 0xff5535, roughness 0.18,
+  metalness 0, clearcoat 1.0, clearcoatRoughness 0.04,
+  envMapIntensity 1.3. Low roughness plus clearcoat gives the
+  gel-like shine.
+
+Rule 29. Light it to match the neumorphic light source.
+  - Environment: RoomEnvironment through PMREMGenerator for studio
+    reflections (the actual "shine")
+  - Key directional light from the top-left (warm white,
+    intensity 2.0) casting soft PCF shadows
+  - A second "shine" light that follows the pointer
+    (pointermove) so the highlight slides across the badge
+  - A ShadowMaterial plane behind the badges to catch a soft
+    coral-brown shadow (0x7a3a20, opacity 0.30)
+
+Rule 30. Keep 3D in sync with the DOM.
+  Watch the day grid with a MutationObserver (childList, subtree,
+  class attribute) and the card with a ResizeObserver. Both call a
+  debounced (requestAnimationFrame) rebuild that disposes old
+  geometries, clears the group and re-creates meshes for the
+  current badges. Render on demand, not in a constant loop.
+
+Rule 31. Load Three.js through an import map (three and
+  three/addons/) as an ES module in a separate
+  <script type="module">. It needs network access to the CDN,
+  so consider a fallback: without WebGL the flat DOM badge should
+  still look acceptable (e.g. keep a coral fallback background).
+
+
+--------------------------------------------------------------
+7. COMMON MISTAKES TO AVOID
+--------------------------------------------------------------
+- Using a different background on inner elements (breaks the
+  neumorphic illusion)
+- Adding a horizontal column-gap (splits the trench into pieces)
+- Forgetting the row-edge caps, so ranges bleed across weeks
+- Inconsistent shadow direction between components
+- Using strong contrast or bold text
+- Hard-coding pixel positions for the 3D badges instead of
+  reading them from the DOM
+- Rendering WebGL in a continuous loop for a static UI
+- Low contrast for accessibility: add focus rings, aria labels
+  and keyboard navigation if used in production
+
+
+--------------------------------------------------------------
+8. QUICK BUILD CHECKLIST
+--------------------------------------------------------------
+[ ] CSS variables for one base colour, two shadows, one accent
+[ ] Three shadow states: extruded, pressed, extruded card
+[ ] 7-column grid, column-gap 0, fixed 44px cells
+[ ] Trench class with left, right and single-day caps
+[ ] Row-edge caps for Sunday and Saturday
+[ ] Selection state machine plus hover preview
+[ ] Single updateGridState function driving all visuals
+[ ] Transparent Three.js canvas, orthographic camera in px units
+[ ] Glossy clearcoat material, warm key light, pointer light
+[ ] Observers keep the 3D badges synced with the DOM
+
+
+==============================================================
+SIGN-OFF
+==============================================================
+Report made by me using the following resource
+(neumorphic_glossy_datepicker.html) and generated by Claude,
+Claude Sonnet 5.
