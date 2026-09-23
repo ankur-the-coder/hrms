@@ -1,5 +1,5 @@
 Analysis made by (mode family name) (Model version: (add model name and version)
-
+**Important - Report will be disqualified if correct model name and version is not mentioned 
 ==============================================================
 REPORT: RULES FOR BUILDING A NEUMORPHIC + GLOSSY DATE RANGE PICKER
 ==============================================================
