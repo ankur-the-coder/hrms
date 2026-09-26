@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Neumorphic Glossy DatePicker</title>
+  <script type="importmap">
+    { "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+  
+  <style>
+    :root {
+      /* Warm Beige Neumorphic Palette */
+      --bg-color: #f0ece6;
+      --shadow-dark: #d3ccc3;
+      --shadow-light: #ffffff;
+      
+      /* Carved Text System */
+      --text-main: #585047;
+      --text-carved-shadow: -1px -1px 1px #c5bcb0, 1px 1px 1px #ffffff;
+      
+      /* Vibrant Coral Accent */
+      --coral-accent: #ff6849;
+      --coral-glow: rgba(255, 104, 73, 0.35);
+      
+      /* Neumorphic Shadow Elevations */
+      --shadow-extruded-card: 20px 20px 40px var(--shadow-dark), -20px -20px 40px var(--shadow-light);
+      --shadow-extruded-btn: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
+      --shadow-pressed-slot: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .picker-container {
+      width: 380px;
+      background: var(--bg-color);
+      border-radius: 36px;
+      padding: 32px;
+      box-shadow: var(--shadow-extruded-card);
+      position: relative;
+      isolation: isolate;
+      touch-action: none;
+    }
+
+    /* Three.js Layer for 3D Glossy Spheres */
+    #gloss-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      border-radius: inherit;
+    }
+
+    /* Carved Text Styling */
+    .carved-text {
+      color: var(--text-main);
+      text-shadow: var(--text-carved-shadow);
+      font-weight: 400;
+    }
+
+    /* Recessed Header Display Slot */
+    .range-display {
+      background: var(--bg-color);
+      border-radius: 20px;
+      padding: 16px 22px;
+      margin-bottom: 26px;
+      box-shadow: var(--shadow-pressed-slot);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.95rem;
+      font-weight: 500;
+      position: relative;
+      z-index: 3;
+    }
+
+    .range-display .placeholder {
+      opacity: 0.55;
+      font-weight: 400;
+    }
+
+    .arrow-icon {
+      color: var(--coral-accent);
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+
+    .calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 22px;
+      position: relative;
+      z-index: 3;
+    }
+
+    .month-year {
+      font-size: 1.1rem;
+      font-weight: 500;
+      letter-spacing: 0.3px;
+    }
+
+    /* Extruded Round Nav Buttons */
+    .nav-btn {
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 50%;
+      background: var(--bg-color);
+      box-shadow: var(--shadow-extruded-btn);
+      color: var(--coral-accent);
+      font-size: 1.2rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+      outline: none;
+    }
+
+    .nav-btn:active {
+      box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+      transform: scale(0.95);
+    }
+
+    /* Weekday Column Titles */
+    .weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      text-align: center;
+      margin-bottom: 10px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      position: relative;
+      z-index: 3;
+    }
+
+    .days-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      row-gap: 8px;
+      column-gap: 0;
+      position: relative;
+      z-index: 3;
+    }
+
+    .day-cell {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+      font-weight: 400;
+      cursor: pointer;
+      user-select: none;
+      background: transparent;
+      position: relative;
+      z-index: 3;
+    }
+
+    .day-cell.empty {
+      cursor: default;
+    }
+
+    /* Hover effect for unselected days */
+    .day-cell.interactive:hover:not(.in-trench) {
+      background: var(--bg-color);
+      box-shadow: var(--shadow-extruded-btn);
+      border-radius: 50%;
+      z-index: 4;
+    }
+
+    /* Continuous Recessed Trench (Seamless span without side borders/dividers) */
+    .day-cell.in-trench {
+      background: transparent !important;
+      box-shadow: inset 0px 4px 4px -2px var(--shadow-dark), inset 0px -4px 4px -2px var(--shadow-light);
+      border: none;
+      border-radius: 0;
+      margin-left: -0.5px;
+      margin-right: -0.5px;
+      width: calc(100% + 1px);
+      z-index: 2;
+    }
+
+    /* Left Cap of Selection Trench */
+    .day-cell.trench-cap-left {
+      border-top-left-radius: 22px;
+      border-bottom-left-radius: 22px;
+      border-top-right-radius: 0;
+      border-bottom-right-radius: 0;
+      box-shadow: inset 4px 4px 5px -1px var(--shadow-dark), inset 0px -4px 5px -1px var(--shadow-light);
+    }
+
+    /* Right Cap of Selection Trench */
+    .day-cell.trench-cap-right {
+      border-top-right-radius: 22px;
+      border-bottom-right-radius: 22px;
+      border-top-left-radius: 0;
+      border-bottom-left-radius: 0;
+      box-shadow: inset -4px 4px 5px -1px var(--shadow-dark), inset 0px -4px 5px -1px var(--shadow-light);
+    }
+
+    /* Standalone Single Day Trench */
+    .day-cell.trench-cap-left.trench-cap-right {
+      border-radius: 22px;
+      box-shadow: inset 4px 4px 6px -1px var(--shadow-dark), inset -4px -4px 6px -1px var(--shadow-light);
+    }
+
+    /* Crisp White Text Badge Overlay on top of 3D Spheres */
+    .day-cell .raised-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      color: #ffffff;
+      font-weight: 600;
+      font-size: 0.95rem;
+      text-shadow: 0px 1px 2px rgba(100, 20, 0, 0.7);
+      position: relative;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 24px;
+      position: relative;
+      z-index: 3;
+    }
+
+    /* Classic Extruded Neumorphic Clear Button */
+    .btn-clear {
+      border: none;
+      padding: 10px 24px;
+      border-radius: 16px;
+      background: var(--bg-color);
+      box-shadow: var(--shadow-extruded-btn);
+      color: var(--coral-accent);
+      font-size: 0.88rem;
+      font-weight: 500;
+      cursor: pointer;
+      outline: none;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+      position: relative;
+      z-index: 3;
+    }
+
+    .btn-clear:active {
+      box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+      transform: scale(0.96);
+    }
+  </style>
+</head>
+<body>
+
+<div class="picker-container">
+  <canvas id="gloss-canvas"></canvas>
+  
+  <!-- Date Range Header Slot -->
+  <div class="range-display carved-text">
+    <span id="start-date-text" class="placeholder">Start Date</span>
+    <span class="arrow-icon">&rarr;</span>
+    <span id="end-date-text" class="placeholder">End Date</span>
+  </div>
+
+  <!-- Month Header Navigation -->
+  <div class="calendar-header">
+    <button class="nav-btn" id="prev-month">&lsaquo;</button>
+    <div class="month-year carved-text" id="month-year-label"></div>
+    <button class="nav-btn" id="next-month">&rsaquo;</button>
+  </div>
+
+  <!-- Weekday Labels -->
+  <div class="weekdays carved-text">
+    <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
+  </div>
+
+  <!-- Days Grid Container -->
+  <div class="days-grid" id="days-grid"></div>
+
+  <!-- Action Footer with Neumorphic Clear Button -->
+  <div class="actions">
+    <button class="btn-clear" id="clear-btn">Clear</button>
+  </div>
+</div>
+
+<script>
+  let currentDate = new Date();
+  let startDate = null;
+  let endDate = null;
+  let hoverDate = null;
+
+  const monthYearLabel = document.getElementById('month-year-label');
+  const daysGrid = document.getElementById('days-grid');
+  const startDateText = document.getElementById('start-date-text');
+  const endDateText = document.getElementById('end-date-text');
+  const prevBtn = document.getElementById('prev-month');
+  const nextBtn = document.getElementById('next-month');
+  const clearBtn = document.getElementById('clear-btn');
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  let cellElements = [];
+
+  function isSameDay(d1, d2) {
+    if (!d1 || !d2) return false;
+    return d1.getFullYear() === d2.getFullYear() &&
+           d1.getMonth() === d2.getMonth() &&
+           d1.getDate() === d2.getDate();
+  }
+
+  function buildCalendarGrid() {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
+    monthYearLabel.textContent = `${monthNames[month]} ${year}`;
+    daysGrid.innerHTML = '';
+    cellElements = [];
+
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+
+    for (let i = 0; i < firstDayIndex; i++) {
+      const emptyCell = document.createElement('div');
+      emptyCell.className = 'day-cell empty';
+      daysGrid.appendChild(emptyCell);
+    }
+
+    for (let day = 1; day <= totalDays; day++) {
+      const cell = document.createElement('div');
+      const dateObj = new Date(year, month, day);
+      const colIndex = (firstDayIndex + day - 1) % 7;
+
+      cell.className = 'day-cell interactive carved-text';
+      cell.dataset.day = day;
+      
+      cellElements.push({
+        element: cell,
+        date: dateObj,
+        colIndex: colIndex
+      });
+
+      cell.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleDateClick(dateObj);
+      });
+
+      cell.addEventListener('mouseenter', () => {
+        if (startDate && !endDate) {
+          hoverDate = dateObj;
+          updateGridState();
+        }
+      });
+
+      daysGrid.appendChild(cell);
+    }
+
+    updateGridState();
+  }
+
+  function updateGridState() {
+    let effStart = null;
+    let effEnd = null;
+
+    if (startDate && endDate) {
+      effStart = startDate < endDate ? startDate : endDate;
+      effEnd = startDate < endDate ? endDate : startDate;
+    } else if (startDate && !endDate && hoverDate) {
+      effStart = startDate < hoverDate ? startDate : hoverDate;
+      effEnd = startDate < hoverDate ? hoverDate : startDate;
+    } else if (startDate && !endDate) {
+      effStart = startDate;
+      effEnd = null;
+    }
+
+    cellElements.forEach(({ element, date, colIndex }) => {
+      element.className = 'day-cell interactive carved-text';
+      element.innerHTML = date.getDate();
+
+      const isStart = effStart && isSameDay(date, effStart);
+      const isEnd = effEnd && isSameDay(date, effEnd);
+      const isInBetween = effStart && effEnd && date > effStart && date < effEnd;
+
+      const inRange = isStart || isEnd || isInBetween;
+
+      if (inRange) {
+        element.classList.add('in-trench');
+
+        if (isStart || colIndex === 0) {
+          element.classList.add('trench-cap-left');
+        }
+
+        if (isEnd || colIndex === 6 || (isStart && !effEnd)) {
+          element.classList.add('trench-cap-right');
+        }
+
+        /* Add badge overlay for crisp white text on top of Three.js spheres */
+        if (isStart || isEnd) {
+          const badge = document.createElement('div');
+          badge.className = 'raised-badge';
+          badge.textContent = date.getDate();
+          element.innerHTML = '';
+          element.appendChild(badge);
+        }
+      }
+    });
+
+    updateDisplayText();
+  }
+
+  function handleDateClick(date) {
+    if (!startDate || (startDate && endDate)) {
+      startDate = new Date(date);
+      endDate = null;
+      hoverDate = null;
+    } else if (startDate && !endDate) {
+      if (date < startDate) {
+        startDate = new Date(date);
+        endDate = null;
+      } else {
+        endDate = new Date(date);
+        hoverDate = null;
+      }
+    }
+    updateGridState();
+  }
+
+  function formatDate(d) {
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function updateDisplayText() {
+    if (startDate) {
+      startDateText.textContent = formatDate(startDate);
+      startDateText.classList.remove('placeholder');
+    } else {
+      startDateText.textContent = 'Start Date';
+      startDateText.classList.add('placeholder');
+    }
+
+    if (endDate) {
+      endDateText.textContent = formatDate(endDate);
+      endDateText.classList.remove('placeholder');
+    } else {
+      endDateText.textContent = 'End Date';
+      endDateText.classList.add('placeholder');
+    }
+  }
+
+  daysGrid.addEventListener('mouseleave', () => {
+    if (startDate && !endDate) {
+      hoverDate = null;
+      updateGridState();
+    }
+  });
+
+  prevBtn.addEventListener('click', () => {
+    currentDate.setMonth(currentDate.getMonth() - 1);
+    buildCalendarGrid();
+  });
+
+  nextBtn.addEventListener('click', () => {
+    currentDate.setMonth(currentDate.getMonth() + 1);
+    buildCalendarGrid();
+  });
+
+  clearBtn.addEventListener('click', () => {
+    startDate = null;
+    endDate = null;
+    hoverDate = null;
+    updateGridState();
+  });
+
+  buildCalendarGrid();
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const host = document.querySelector('.picker-container');
+const grid = document.getElementById('days-grid');
+const canvas = document.getElementById('gloss-canvas');
+
+/* High-DPI WebGL Renderer settings with anti-aliasing */
+const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance" });
+renderer.setClearColor(0x000000, 0);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 3));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.05).texture;
+
+const camera = new THREE.OrthographicCamera(0, 1, 0, -1, 1, 2000);
+camera.position.z = 600;
+
+/* Shadow-Casting Key Light (Tracks cursor position dynamically) */
+const key = new THREE.DirectionalLight(0xfff4ea, 1.85);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.bias = -0.0005;
+scene.add(key, key.target);
+
+/* Warm Ambient light for soft, natural illumination */
+const ambientLight = new THREE.AmbientLight(0xffedd8, 0.95);
+scene.add(ambientLight);
+
+/* Warm Bottom Fill light to soften underside shadows */
+const bottomFill = new THREE.DirectionalLight(0xffdbcd, 0.75);
+bottomFill.position.set(0, -300, 200);
+scene.add(bottomFill);
+
+/* Soft shadow catcher plane behind the spheres */
+const catcher = new THREE.Mesh(
+  new THREE.PlaneGeometry(1, 1),
+  new THREE.ShadowMaterial({ color: 0x7a3a20, opacity: 0.28 })
+);
+catcher.receiveShadow = true;
+scene.add(catcher);
+
+/* Glossy Coral Physical Material */
+const badgeMat = new THREE.MeshPhysicalMaterial({
+  color: 0xff5535,
+  roughness: 0.16,
+  metalness: 0.0,
+  clearcoat: 1.0,
+  clearcoatRoughness: 0.03,
+  envMapIntensity: 1.4
+});
+
+const group = new THREE.Group();
+scene.add(group);
+
+let W = 0, H = 0;
+let currentCursorX = null;
+let currentCursorY = null;
+
+function updateLightingForCursor(clientX, clientY) {
+  if (W === 0 || H === 0) return;
+
+  const r = host.getBoundingClientRect();
+  
+  /* Save last known cursor position */
+  if (clientX !== undefined && clientY !== undefined) {
+    currentCursorX = clientX;
+    currentCursorY = clientY;
+  }
+
+  let mx, my;
+  if (currentCursorX !== null && currentCursorY !== null) {
+    mx = currentCursorX - r.left;
+    my = currentCursorY - r.top;
+  } else {
+    /* Initial default position on load */
+    mx = W * 0.2;
+    my = H * 0.2;
+  }
+
+  const c = new THREE.Vector3(W / 2, -H / 2, 0);
+
+  /* Calculate cursor displacement vector from container center */
+  const dx = mx - W / 2;
+  const dy = my - H / 2;
+
+  /* Dynamically update key shadow light position to make light, shading, and cast shadow pivot with cursor */
+  key.target.position.copy(c);
+  key.position.set(c.x + dx * 1.8 - 80, c.y - dy * 1.8 + 80, 320);
+
+  /* Update shadow camera frustum projection */
+  const s = key.shadow.camera;
+  const m = Math.max(W, H) * 1.5;
+  s.left = -m; s.right = m; s.top = m; s.bottom = -m; s.near = 1; s.far = 1500;
+  s.updateProjectionMatrix();
+
+  draw();
+}
+
+function resize() {
+  const r = host.getBoundingClientRect();
+  W = r.width; H = r.height;
+  renderer.setSize(W, H, false);
+  camera.right = W; camera.bottom = -H; camera.updateProjectionMatrix();
+  catcher.scale.set(W, H, 1);
+  catcher.position.set(W / 2, -H / 2, -14);
+  
+  updateLightingForCursor();
+}
+
+function rebuild() {
+  const c = host.getBoundingClientRect();
+  if (c.width !== W || c.height !== H) resize();
+  group.children.forEach(m => m.geometry.dispose());
+  group.clear();
+
+  /* High res 64x64 sphere geometry */
+  const highResSphereGeo = new THREE.SphereGeometry(18, 64, 64);
+
+  grid.querySelectorAll('.raised-badge').forEach(el => {
+    const r = el.getBoundingClientRect();
+    const mesh = new THREE.Mesh(highResSphereGeo, badgeMat);
+    mesh.scale.z = 0.65;
+    mesh.position.set((r.left + r.right) / 2 - c.left, -((r.top + r.bottom) / 2 - c.top), 5);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  });
+
+  updateLightingForCursor();
+}
+
+let raf = 0;
+function draw() { 
+  cancelAnimationFrame(raf); 
+  raf = requestAnimationFrame(() => renderer.render(scene, camera)); 
+}
+
+let pending = 0;
+function schedule() { 
+  cancelAnimationFrame(pending); 
+  pending = requestAnimationFrame(rebuild); 
+}
+
+new MutationObserver(schedule).observe(grid, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+new ResizeObserver(schedule).observe(host);
+
+/* Dynamic light and shadow direction tracking on pointer move */
+host.addEventListener('pointermove', e => {
+  updateLightingForCursor(e.clientX, e.clientY);
+});
+
+/* Pointer leave retains the last saved cursor position so shadow casting angle is preserved */
+host.addEventListener('pointerleave', () => {
+  updateLightingForCursor();
+});
+
+window.addEventListener('load', () => {
+  resize();
+  rebuild();
+});
+
+resize();
+rebuild();
+</script>
+</body>
+</html>
